@@ -7,9 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		8DD76FAC0486AB0100D96B5E /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 08FB7796FE84155DC02AAC07 /* main.m */; settings = {ATTRIBUTES = (); }; };
-		94AF51EC140DABBD00037850 /* DTDeviceKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 94AF51EB140DABBD00037850 /* DTDeviceKit.framework */; };
-		94AF5200140DAD0000037850 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 94AF51FF140DAD0000037850 /* Foundation.framework */; };
+		8DD76FAC0486AB0100D96B5E /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = 08FB7796FE84155DC02AAC07 /* main.c */; settings = {ATTRIBUTES = (); }; };
+		945856AA140EC3BA009DFEA5 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 945856A9140EC3BA009DFEA5 /* CoreFoundation.framework */; };
+		94AF51EC140DABBD00037850 /* MobileDevice.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 94AF51EB140DABBD00037850 /* MobileDevice.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -25,10 +25,11 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		08FB7796FE84155DC02AAC07 /* main.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		08FB7796FE84155DC02AAC07 /* main.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = main.c; sourceTree = "<group>"; };
 		8DD76FB20486AB0100D96B5E /* deviceconsole */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = deviceconsole; sourceTree = BUILT_PRODUCTS_DIR; };
-		94AF51EB140DABBD00037850 /* DTDeviceKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = DTDeviceKit.framework; sourceTree = SOURCE_ROOT; };
-		94AF51FF140DAD0000037850 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
+		945855DB140EB622009DFEA5 /* MobileDevice.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MobileDevice.h; sourceTree = "<group>"; };
+		945856A9140EC3BA009DFEA5 /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
+		94AF51EB140DABBD00037850 /* MobileDevice.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = MobileDevice.framework; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -36,8 +37,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				94AF51EC140DABBD00037850 /* DTDeviceKit.framework in Frameworks */,
-				94AF5200140DAD0000037850 /* Foundation.framework in Frameworks */,
+				94AF51EC140DABBD00037850 /* MobileDevice.framework in Frameworks */,
+				945856AA140EC3BA009DFEA5 /* CoreFoundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -47,8 +48,8 @@
 		08FB7794FE84155DC02AAC07 /* deviceconsole */ = {
 			isa = PBXGroup;
 			children = (
-				94AF51EB140DABBD00037850 /* DTDeviceKit.framework */,
-				94AF51FF140DAD0000037850 /* Foundation.framework */,
+				945856A9140EC3BA009DFEA5 /* CoreFoundation.framework */,
+				94AF51EB140DABBD00037850 /* MobileDevice.framework */,
 				08FB7795FE84155DC02AAC07 /* Source */,
 				1AB674ADFE9D54B511CA2CBB /* Products */,
 			);
@@ -58,7 +59,8 @@
 		08FB7795FE84155DC02AAC07 /* Source */ = {
 			isa = PBXGroup;
 			children = (
-				08FB7796FE84155DC02AAC07 /* main.m */,
+				945855DB140EB622009DFEA5 /* MobileDevice.h */,
+				08FB7796FE84155DC02AAC07 /* main.c */,
 			);
 			name = Source;
 			sourceTree = "<group>";
@@ -121,7 +123,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				8DD76FAC0486AB0100D96B5E /* main.m in Sources */,
+				8DD76FAC0486AB0100D96B5E /* main.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
