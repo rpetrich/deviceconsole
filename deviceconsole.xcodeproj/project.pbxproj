@@ -27,7 +27,7 @@
 /* Begin PBXFileReference section */
 		08FB7796FE84155DC02AAC07 /* main.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		8DD76FB20486AB0100D96B5E /* deviceconsole */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = deviceconsole; sourceTree = BUILT_PRODUCTS_DIR; };
-		94AF51EB140DABBD00037850 /* DTDeviceKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = DTDeviceKit.framework; path = Platforms/iPhoneOS.platform/Developer/Library/PrivateFrameworks/DTDeviceKit.framework; sourceTree = DEVELOPER_DIR; };
+		94AF51EB140DABBD00037850 /* DTDeviceKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = DTDeviceKit.framework; sourceTree = SOURCE_ROOT; };
 		94AF51FF140DAD0000037850 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
