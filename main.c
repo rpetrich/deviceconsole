@@ -13,16 +13,36 @@ static CFMutableDictionaryRef liveConnections;
 static int debug;
 static CFStringRef requiredDeviceId;
 
-static void SocketCallback(CFSocketRef s, CFSocketCallBackType type, CFDataRef address, const void *data, void *info)
+static inline void write_fully(int fd, const void *buffer, size_t length)
 {
-    ssize_t length = CFDataGetLength(data);
-    const unsigned char *buffer = CFDataGetBytePtr(data);
     while (length) {
-        ssize_t result = write(1, buffer, length);
+        ssize_t result = write(fd, buffer, length);
         if (result == -1)
             break;
         buffer += result;
         length -= result;
+    }
+}
+
+static void SocketCallback(CFSocketRef s, CFSocketCallBackType type, CFDataRef address, const void *data, void *info)
+{
+    // Skip null bytes
+    ssize_t length = CFDataGetLength(data);
+    const unsigned char *buffer = CFDataGetBytePtr(data);
+    while (length) {
+        while (*buffer == '\0') {
+            buffer++;
+            length--;
+            if (length == 0)
+                return;
+        }
+        size_t extentLength = 0;
+        while ((buffer[extentLength] != '\0') && extentLength != length) {
+            extentLength++;
+        }
+        write_fully(1, buffer, extentLength);
+        length -= extentLength;
+        buffer += extentLength;
     }
 }
 
