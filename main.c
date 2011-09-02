@@ -121,6 +121,10 @@ static void DeviceNotificationCallback(am_device_notification_callback_info *inf
 
 int main (int argc, char * const argv[])
 {
+    if ((argc == 2) && (strcmp(argv[1], "--help") == 0)) {
+        fprintf(stderr, "Usage: %s [options]\nOptions:\n -d        Include connect/disconnect messages in standard out\n -u <udid> Show only logs from a specific device\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
+        return 1;
+    }
     int c;
     while ((c = getopt(argc, argv, "du:")) != -1)
         switch (c)
