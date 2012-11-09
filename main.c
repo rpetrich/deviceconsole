@@ -13,6 +13,9 @@ static CFMutableDictionaryRef liveConnections;
 static int debug;
 static CFStringRef requiredDeviceId;
 
+static int exitAfterTimeout;
+static int linesLogged;
+
 static inline void write_fully(int fd, const void *buffer, size_t length)
 {
     while (length) {
@@ -21,6 +24,26 @@ static inline void write_fully(int fd, const void *buffer, size_t length)
             break;
         buffer += result;
         length -= result;
+    }
+}
+
+static void Timeout()
+{
+    static int logged = -1;
+
+    if(exitAfterTimeout) {
+        if(debug)
+            fprintf(stderr, "[!] Exit due to timeout.\n");
+        exit(0);
+    }
+
+    if(logged != linesLogged) {
+        logged = linesLogged;
+    } else {
+        if(debug)
+            fprintf(stderr, "[!] Exit after timeout (because nothing else has been logged.)\n");
+
+        exit(0);
     }
 }
 
@@ -34,7 +57,7 @@ static void SocketCallback(CFSocketRef s, CFSocketCallBackType type, CFDataRef a
             buffer++;
             length--;
             if (length == 0)
-                return;
+                goto exit;
         }
         size_t extentLength = 0;
         while ((buffer[extentLength] != '\0') && extentLength != length) {
@@ -44,6 +67,15 @@ static void SocketCallback(CFSocketRef s, CFSocketCallBackType type, CFDataRef a
         length -= extentLength;
         buffer += extentLength;
     }
+
+exit:
+    /*
+     * It turns out that every time we get here, we've logged one complete log
+     * statement. (which could be more than one line, but you get the idea.)
+     */
+    linesLogged++;
+
+    return;
 }
 
 static void DeviceNotificationCallback(am_device_notification_callback_info *info, void *unknown)
@@ -70,7 +102,11 @@ static void DeviceNotificationCallback(am_device_notification_callback_info *inf
                     if (AMDeviceStartSession(device) == MDERR_OK) {
                         service_conn_t connection;
                         if (AMDeviceStartService(device, AMSVC_SYSLOG_RELAY, &connection, NULL) == MDERR_OK) {
-                            CFSocketRef socket = CFSocketCreateWithNative(kCFAllocatorDefault, connection, kCFSocketDataCallBack, SocketCallback, NULL);
+                            CFSocketRef socket = CFSocketCreateWithNative(kCFAllocatorDefault,
+                                                                          connection,
+                                                                          kCFSocketDataCallBack,
+                                                                          SocketCallback,
+                                                                          NULL);
                             if (socket) {
                                 CFRunLoopSourceRef source = CFSocketCreateRunLoopSource(kCFAllocatorDefault, socket, 0);
                                 if (source) {
@@ -121,12 +157,25 @@ static void DeviceNotificationCallback(am_device_notification_callback_info *inf
 
 int main (int argc, char * const argv[])
 {
+    double timeout = 0;
+
     if ((argc == 2) && (strcmp(argv[1], "--help") == 0)) {
-        fprintf(stderr, "Usage: %s [options]\nOptions:\n -d        Include connect/disconnect messages in standard out\n -u <udid> Show only logs from a specific device\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
+        fprintf(stderr,
+                "Usage: %s [options]\nOptions:\n"
+                " -d           Include connect/disconnect messages in standard out,\n"
+                "              and exit reason in standard err.\n"
+                " -u <udid>    Show only logs from a specific device.\n"
+                " -t <timeout> Exit after the specified timeout, in seconds (can be decimal),\n"
+                "              if there have been no more logs in that timeframe.\n"
+                " -x           (Must use with -t.) Exit unconditionally after the timeout,\n" 
+                "              even if more logs are coming in.\n"
+                "\nControl-C to disconnect\n"
+                "Mail bug reports and suggestions to <ryan.petrich@medialets.com>\n",
+                argv[0]);
         return 1;
     }
     int c;
-    while ((c = getopt(argc, argv, "du:")) != -1)
+    while ((c = getopt(argc, argv, "dxt:u:")) != -1)
         switch (c)
     {
         case 'd':
@@ -137,8 +186,14 @@ int main (int argc, char * const argv[])
                 CFRelease(requiredDeviceId);
             requiredDeviceId = CFStringCreateWithCString(kCFAllocatorDefault, optarg, kCFStringEncodingASCII);
             break;
+        case 't':
+            timeout = atof(optarg);
+            break;
+        case 'x':
+            exitAfterTimeout = 1;
+            break;
         case '?':
-            if (optopt == 'u')
+            if (optopt == 'u' || optopt == 't')
                 fprintf(stderr, "Option -%c requires an argument.\n", optopt);
             else if (isprint(optopt))
                 fprintf(stderr, "Unknown option `-%c'.\n", optopt);
@@ -151,6 +206,21 @@ int main (int argc, char * const argv[])
     liveConnections = CFDictionaryCreateMutable(kCFAllocatorDefault, 0, NULL, NULL);
     am_device_notification *notification;
     AMDeviceNotificationSubscribe(DeviceNotificationCallback, 0, 0, NULL, &notification);
+
+    if(timeout != 0) {
+        CFRunLoopTimerRef timer = CFRunLoopTimerCreate(NULL,
+                                                       /* give it a couple extra seconds to connect */
+                                                       CFAbsoluteTimeGetCurrent() + 2.0 +  timeout,
+                                                       timeout,
+                                                       0, /* flags */
+                                                       0, /* order */
+                                                       (CFRunLoopTimerCallBack) Timeout,
+                                                       NULL);
+
+        CFRunLoopAddTimer(CFRunLoopGetMain(), timer, kCFRunLoopCommonModes);
+    }
+
+
     CFRunLoopRun();
     return 0;
 }
