@@ -146,6 +146,7 @@
 				INSTALL_PATH = /usr/local/bin;
 				LD_RUNPATH_SEARCH_PATHS = "\"/Applications/Utilities/iPhone Configuration Utility.app/Contents/Frameworks\" \"/Developer/Platforms/iPhoneOS.platform/Developer/Library/PrivateFrameworks\"";
 				PRODUCT_NAME = deviceconsole;
+				SDKROOT = macosx10.7;
 			};
 			name = Debug;
 		};
@@ -162,6 +163,7 @@
 				INSTALL_PATH = /usr/local/bin;
 				LD_RUNPATH_SEARCH_PATHS = "\"/Applications/Utilities/iPhone Configuration Utility.app/Contents/Frameworks\" \"/Developer/Platforms/iPhoneOS.platform/Developer/Library/PrivateFrameworks\"";
 				PRODUCT_NAME = deviceconsole;
+				SDKROOT = macosx10.7;
 			};
 			name = Release;
 		};
