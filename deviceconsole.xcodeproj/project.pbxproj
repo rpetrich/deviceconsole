@@ -146,7 +146,6 @@
 				INSTALL_PATH = /usr/local/bin;
 				LD_RUNPATH_SEARCH_PATHS = "\"/Applications/Utilities/iPhone Configuration Utility.app/Contents/Frameworks\" \"/Developer/Platforms/iPhoneOS.platform/Developer/Library/PrivateFrameworks\"";
 				PRODUCT_NAME = deviceconsole;
-				SDKROOT = macosx10.7;
 			};
 			name = Debug;
 		};
@@ -163,7 +162,6 @@
 				INSTALL_PATH = /usr/local/bin;
 				LD_RUNPATH_SEARCH_PATHS = "\"/Applications/Utilities/iPhone Configuration Utility.app/Contents/Frameworks\" \"/Developer/Platforms/iPhoneOS.platform/Developer/Library/PrivateFrameworks\"";
 				PRODUCT_NAME = deviceconsole;
-				SDKROOT = macosx10.7;
 			};
 			name = Release;
 		};
@@ -177,7 +175,6 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PREBINDING = NO;
-				SDKROOT = macosx10.5;
 			};
 			name = Debug;
 		};
@@ -189,7 +186,6 @@
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				PREBINDING = NO;
-				SDKROOT = macosx10.5;
 			};
 			name = Release;
 		};
