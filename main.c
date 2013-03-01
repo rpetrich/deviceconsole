@@ -53,71 +53,75 @@ static inline void write_string(int fd, const char *string)
 
 static void write_colored(int fd, const char *buffer, size_t length)
 {
-    size_t space_offsets[6];
+    if (length < 16) {
+        write_fully(fd, buffer, length);
+        return;
+    }
+    size_t space_offsets[3];
     int o = 0;
-    for (size_t i = 0; i < length; i++) {
+    for (size_t i = 16; i < length; i++) {
         if (buffer[i] == ' ') {
             space_offsets[o++] = i;
-            if (o == 6) {
+            if (o == 3) {
                 break;
             }
         }
     }
-    if (o == 6) {
+    if (o == 3) {
         // Log date and device name
         write_const(fd, COLOR_DARK_WHITE);
-        write_fully(fd, buffer, space_offsets[3]);
+        write_fully(fd, buffer, space_offsets[0]);
         // Log process name
         int pos = 0;
-        for (int i = space_offsets[3]; i < space_offsets[4]; i++) {
+        for (int i = space_offsets[0]; i < space_offsets[0]; i++) {
             if (buffer[i] == '[') {
                 pos = i;
                 break;
             }
         }
         write_const(fd, COLOR_CYAN);
-        if (pos && buffer[space_offsets[4]-1] == ']') {
-            write_fully(fd, buffer + space_offsets[3], pos - space_offsets[3]);
+        if (pos && buffer[space_offsets[1]-1] == ']') {
+            write_fully(fd, buffer + space_offsets[0], pos - space_offsets[0]);
             write_const(fd, COLOR_DARK_CYAN);
-            write_fully(fd, buffer + pos, space_offsets[4] - pos);
+            write_fully(fd, buffer + pos, space_offsets[1] - pos);
         } else {
-            write_fully(fd, buffer + space_offsets[3], space_offsets[4] - space_offsets[3]);
+            write_fully(fd, buffer + space_offsets[0], space_offsets[1] - space_offsets[0]);
         }
         // Log level
-        size_t levelLength = space_offsets[5] - space_offsets[4];
+        size_t levelLength = space_offsets[2] - space_offsets[1];
         if (levelLength > 4) {
             const char *normalColor;
             const char *darkColor;
-            if (levelLength == 9 && memcmp(buffer + space_offsets[4], " <Debug>:", 9) == 0){
+            if (levelLength == 9 && memcmp(buffer + space_offsets[1], " <Debug>:", 9) == 0){
                 normalColor = COLOR_MAGENTA;
                 darkColor = COLOR_DARK_MAGENTA;
-            } else if (levelLength == 11 && memcmp(buffer + space_offsets[4], " <Warning>:", 11) == 0){
+            } else if (levelLength == 11 && memcmp(buffer + space_offsets[1], " <Warning>:", 11) == 0){
                 normalColor = COLOR_YELLOW;
                 darkColor = COLOR_DARK_YELLOW;
-            } else if (levelLength == 9 && memcmp(buffer + space_offsets[4], " <Error>:", 9) == 0){
+            } else if (levelLength == 9 && memcmp(buffer + space_offsets[1], " <Error>:", 9) == 0){
                 normalColor = COLOR_RED;
                 darkColor = COLOR_DARK_RED;
-            } else if (levelLength == 10 && memcmp(buffer + space_offsets[4], " <Notice>:", 10) == 0) {
+            } else if (levelLength == 10 && memcmp(buffer + space_offsets[1], " <Notice>:", 10) == 0) {
                 normalColor = COLOR_GREEN;
                 darkColor = COLOR_DARK_GREEN;
             } else {
                 goto level_unformatted;
             }
             write_string(fd, darkColor);
-            write_fully(fd, buffer + space_offsets[4], 2);
+            write_fully(fd, buffer + space_offsets[1], 2);
             write_string(fd, normalColor);
-            write_fully(fd, buffer + space_offsets[4] + 2, levelLength - 4);
+            write_fully(fd, buffer + space_offsets[1] + 2, levelLength - 4);
             write_string(fd, darkColor);
-            write_fully(fd, buffer + space_offsets[4] + levelLength - 2, 1);
+            write_fully(fd, buffer + space_offsets[1] + levelLength - 2, 1);
             write_const(fd, COLOR_DARK_WHITE);
-            write_fully(fd, buffer + space_offsets[4] + levelLength - 1, 1);
+            write_fully(fd, buffer + space_offsets[1] + levelLength - 1, 1);
         } else {
         level_unformatted:
             write_const(fd, COLOR_RESET);
-            write_fully(fd, buffer + space_offsets[4], levelLength);
+            write_fully(fd, buffer + space_offsets[1], levelLength);
         }
         write_const(fd, COLOR_RESET);
-        write_fully(fd, buffer + space_offsets[5], length - space_offsets[5]);
+        write_fully(fd, buffer + space_offsets[2], length - space_offsets[2]);
     } else {
         write_fully(fd, buffer, length);
     }
