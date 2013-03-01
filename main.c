@@ -12,8 +12,10 @@ typedef struct {
 static CFMutableDictionaryRef liveConnections;
 static int debug;
 static CFStringRef requiredDeviceId;
+static void (*printMessage)(int fd, const char *, size_t);
+static void (*printSeparator)(int fd);
 
-static inline void write_fully(int fd, const void *buffer, size_t length)
+static inline void write_fully(int fd, const char *buffer, size_t length)
 {
     while (length) {
         ssize_t result = write(fd, buffer, length);
@@ -24,11 +26,108 @@ static inline void write_fully(int fd, const void *buffer, size_t length)
     }
 }
 
+static inline void write_string(int fd, const char *string)
+{
+    write_fully(fd, string, strlen(string));
+}
+
+#define write_const(fd, text) write_fully(fd, text, sizeof(text)-1)
+
+#define COLOR_RESET         "\e[m"
+#define COLOR_NORMAL        "\e[0m"
+#define COLOR_DARK          "\e[2m"
+#define COLOR_RED           "\e[0;31m"
+#define COLOR_DARK_RED      "\e[2;31m"
+#define COLOR_GREEN         "\e[0;32m"
+#define COLOR_DARK_GREEN    "\e[2;32m"
+#define COLOR_YELLOW        "\e[0;33m"
+#define COLOR_DARK_YELLOW   "\e[2;33m"
+#define COLOR_BLUE          "\e[0;34m"
+#define COLOR_DARK_BLUE     "\e[2;34m"
+#define COLOR_MAGENTA       "\e[0;35m"
+#define COLOR_DARK_MAGENTA  "\e[2;35m"
+#define COLOR_CYAN          "\e[0;36m"
+#define COLOR_DARK_CYAN     "\e[2;36m"
+#define COLOR_WHITE         "\e[0;37m"
+#define COLOR_DARK_WHITE    "\e[0;37m"
+
+static void write_colored(int fd, const char *buffer, size_t length)
+{
+    size_t space_offsets[6];
+    int o = 0;
+    for (size_t i = 0; i < length; i++) {
+        if (buffer[i] == ' ') {
+            space_offsets[o++] = i;
+            if (o == 6) {
+                break;
+            }
+        }
+    }
+    if (o == 6) {
+        // Log date and device name
+        write_const(fd, COLOR_DARK_WHITE);
+        write_fully(fd, buffer, space_offsets[3]);
+        // Log process name
+        int pos = 0;
+        for (int i = space_offsets[3]; i < space_offsets[4]; i++) {
+            if (buffer[i] == '[') {
+                pos = i;
+                break;
+            }
+        }
+        write_const(fd, COLOR_CYAN);
+        if (pos && buffer[space_offsets[4]-1] == ']') {
+            write_fully(fd, buffer + space_offsets[3], pos - space_offsets[3]);
+            write_const(fd, COLOR_DARK_CYAN);
+            write_fully(fd, buffer + pos, space_offsets[4] - pos);
+        } else {
+            write_fully(fd, buffer + space_offsets[3], space_offsets[4] - space_offsets[3]);
+        }
+        // Log level
+        size_t levelLength = space_offsets[5] - space_offsets[4];
+        if (levelLength > 4) {
+            const char *normalColor;
+            const char *darkColor;
+            if (levelLength == 9 && memcmp(buffer + space_offsets[4], " <Debug>:", 9) == 0){
+                normalColor = COLOR_MAGENTA;
+                darkColor = COLOR_DARK_MAGENTA;
+            } else if (levelLength == 11 && memcmp(buffer + space_offsets[4], " <Warning>:", 11) == 0){
+                normalColor = COLOR_YELLOW;
+                darkColor = COLOR_DARK_YELLOW;
+            } else if (levelLength == 9 && memcmp(buffer + space_offsets[4], " <Error>:", 9) == 0){
+                normalColor = COLOR_RED;
+                darkColor = COLOR_DARK_RED;
+            } else if (levelLength == 10 && memcmp(buffer + space_offsets[4], " <Notice>:", 10) == 0) {
+                normalColor = COLOR_GREEN;
+                darkColor = COLOR_DARK_GREEN;
+            } else {
+                goto level_unformatted;
+            }
+            write_string(fd, darkColor);
+            write_fully(fd, buffer + space_offsets[4], 2);
+            write_string(fd, normalColor);
+            write_fully(fd, buffer + space_offsets[4] + 2, levelLength - 4);
+            write_string(fd, darkColor);
+            write_fully(fd, buffer + space_offsets[4] + levelLength - 2, 1);
+            write_const(fd, COLOR_DARK_WHITE);
+            write_fully(fd, buffer + space_offsets[4] + levelLength - 1, 1);
+        } else {
+        level_unformatted:
+            write_const(fd, COLOR_RESET);
+            write_fully(fd, buffer + space_offsets[4], levelLength);
+        }
+        write_const(fd, COLOR_RESET);
+        write_fully(fd, buffer + space_offsets[5], length - space_offsets[5]);
+    } else {
+        write_fully(fd, buffer, length);
+    }
+}
+
 static void SocketCallback(CFSocketRef s, CFSocketCallBackType type, CFDataRef address, const void *data, void *info)
 {
     // Skip null bytes
     ssize_t length = CFDataGetLength(data);
-    const unsigned char *buffer = CFDataGetBytePtr(data);
+    const char *buffer = (const char *)CFDataGetBytePtr(data);
     while (length) {
         while (*buffer == '\0') {
             buffer++;
@@ -40,7 +139,8 @@ static void SocketCallback(CFSocketRef s, CFSocketCallBackType type, CFDataRef a
         while ((buffer[extentLength] != '\0') && extentLength != length) {
             extentLength++;
         }
-        write_fully(1, buffer, extentLength);
+        printMessage(1, buffer, extentLength);
+        printSeparator(1);
         length -= extentLength;
         buffer += extentLength;
     }
@@ -119,6 +219,20 @@ static void DeviceNotificationCallback(am_device_notification_callback_info *inf
     }
 }
 
+static void no_separator(int fd)
+{
+}
+
+static void plain_separator(int fd)
+{
+    write_const(fd, "--\n");
+}
+
+static void color_separator(int fd)
+{
+    write_const(fd, COLOR_DARK_WHITE "--" COLOR_RESET "\n");
+}
+
 int main (int argc, char * const argv[])
 {
     if ((argc == 2) && (strcmp(argv[1], "--help") == 0)) {
@@ -126,11 +240,15 @@ int main (int argc, char * const argv[])
         return 1;
     }
     int c;
-    while ((c = getopt(argc, argv, "du:")) != -1)
+    bool use_separators = false;
+    while ((c = getopt(argc, argv, "dsu:")) != -1)
         switch (c)
     {
         case 'd':
             debug = 1;
+            break;
+        case 's':
+            use_separators = true;
             break;
         case 'u':
             if (requiredDeviceId)
@@ -147,6 +265,13 @@ int main (int argc, char * const argv[])
             return 1;
         default:
             abort();
+    }
+    if (isatty(1)) {
+        printMessage = &write_colored;
+        printSeparator = use_separators ? &color_separator : &no_separator;
+    } else {
+        printMessage = &write_fully;
+        printSeparator = use_separators ? &plain_separator : &no_separator;
     }
     liveConnections = CFDictionaryCreateMutable(kCFAllocatorDefault, 0, NULL, NULL);
     am_device_notification *notification;
