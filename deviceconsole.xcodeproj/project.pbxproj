@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		2E995D32186790A10091AD24 /* forward.c in Sources */ = {isa = PBXBuildFile; fileRef = 2E995D31186790A10091AD24 /* forward.c */; };
+		2E995D35186791AC0091AD24 /* read.c in Sources */ = {isa = PBXBuildFile; fileRef = 2E995D34186791AC0091AD24 /* read.c */; };
 		8DD76FAC0486AB0100D96B5E /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = 08FB7796FE84155DC02AAC07 /* main.c */; settings = {ATTRIBUTES = (); }; };
 		945856AA140EC3BA009DFEA5 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 945856A9140EC3BA009DFEA5 /* CoreFoundation.framework */; };
 		94AF51EC140DABBD00037850 /* MobileDevice.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 94AF51EB140DABBD00037850 /* MobileDevice.framework */; };
@@ -26,6 +28,9 @@
 
 /* Begin PBXFileReference section */
 		08FB7796FE84155DC02AAC07 /* main.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = main.c; sourceTree = "<group>"; };
+		2E995D31186790A10091AD24 /* forward.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = forward.c; sourceTree = "<group>"; };
+		2E995D33186790BB0091AD24 /* extern.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = extern.h; sourceTree = "<group>"; };
+		2E995D34186791AC0091AD24 /* read.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = read.c; sourceTree = "<group>"; };
 		8DD76FB20486AB0100D96B5E /* deviceconsole */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = deviceconsole; sourceTree = BUILT_PRODUCTS_DIR; };
 		945855DB140EB622009DFEA5 /* MobileDevice.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MobileDevice.h; sourceTree = "<group>"; };
 		945856A9140EC3BA009DFEA5 /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
@@ -59,8 +64,11 @@
 		08FB7795FE84155DC02AAC07 /* Source */ = {
 			isa = PBXGroup;
 			children = (
+				2E995D34186791AC0091AD24 /* read.c */,
 				945855DB140EB622009DFEA5 /* MobileDevice.h */,
 				08FB7796FE84155DC02AAC07 /* main.c */,
+				2E995D31186790A10091AD24 /* forward.c */,
+				2E995D33186790BB0091AD24 /* extern.h */,
 			);
 			name = Source;
 			sourceTree = "<group>";
@@ -99,6 +107,8 @@
 /* Begin PBXProject section */
 		08FB7793FE84155DC02AAC07 /* Project object */ = {
 			isa = PBXProject;
+			attributes = {
+			};
 			buildConfigurationList = 1DEB928908733DD80010E9CD /* Build configuration list for PBXProject "deviceconsole" */;
 			compatibilityVersion = "Xcode 3.1";
 			developmentRegion = English;
@@ -124,6 +134,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				8DD76FAC0486AB0100D96B5E /* main.c in Sources */,
+				2E995D32186790A10091AD24 /* forward.c in Sources */,
+				2E995D35186791AC0091AD24 /* read.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

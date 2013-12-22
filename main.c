@@ -2,6 +2,8 @@
 #include <unistd.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include "MobileDevice.h"
+#include <sys/stat.h>
+#include "extern.h"
 
 typedef struct {
     service_conn_t connection;
@@ -11,6 +13,7 @@ typedef struct {
 
 static CFMutableDictionaryRef liveConnections;
 static int debug;
+static bool simulator;
 static CFStringRef requiredDeviceId;
 static void (*printMessage)(int fd, const char *, size_t);
 static void (*printSeparator)(int fd);
@@ -237,6 +240,29 @@ static void color_separator(int fd)
     write_const(fd, COLOR_DARK_WHITE "--" COLOR_RESET "\n");
 }
 
+void local_write_callback(char *p, size_t size){
+    char buffer[size];
+    bzero(buffer, sizeof(buffer));
+    memcpy(&buffer, p, size);
+    
+    printMessage(1, buffer, size);
+    
+}
+
+static void log_local(){
+    FILE *fp = fopen("/Users/eswick/Library/Logs/iOS Simulator/7.0.3/system.log", "r");
+    
+    struct stat sb;
+    
+    rflag = 0;
+    fflag = 1;
+    
+    enum STYLE style = RLINES;
+    forward(fp, style, 0, &sb);
+    
+    fclose(fp);
+}
+
 int main (int argc, char * const argv[])
 {
     if ((argc == 2) && (strcmp(argv[1], "--help") == 0)) {
@@ -277,9 +303,14 @@ int main (int argc, char * const argv[])
         printMessage = &write_fully;
         printSeparator = use_separators ? &plain_separator : &no_separator;
     }
-    liveConnections = CFDictionaryCreateMutable(kCFAllocatorDefault, 0, NULL, NULL);
-    am_device_notification *notification;
-    AMDeviceNotificationSubscribe(DeviceNotificationCallback, 0, 0, NULL, &notification);
+    
+    if(simulator){
+        log_local();
+    }else{
+        liveConnections = CFDictionaryCreateMutable(kCFAllocatorDefault, 0, NULL, NULL);
+        am_device_notification *notification;
+        AMDeviceNotificationSubscribe(DeviceNotificationCallback, 0, 0, NULL, &notification);
+    }
     CFRunLoopRun();
     return 0;
 }
