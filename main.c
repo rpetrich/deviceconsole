@@ -1,8 +1,9 @@
 #include <stdio.h>
 #include <unistd.h>
+#include <getopt.h>
+#include <sys/stat.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include "MobileDevice.h"
-#include <sys/stat.h>
 #include "extern.h"
 
 typedef struct {
@@ -13,7 +14,8 @@ typedef struct {
 
 static CFMutableDictionaryRef liveConnections;
 static int debug;
-static bool simulator;
+static bool use_separators;
+static CFStringRef simulatorVersion;
 static CFStringRef requiredDeviceId;
 static void (*printMessage)(int fd, const char *, size_t);
 static void (*printSeparator)(int fd);
@@ -265,37 +267,48 @@ static void log_local(){
 
 int main (int argc, char * const argv[])
 {
-    if ((argc == 2) && (strcmp(argv[1], "--help") == 0)) {
-        fprintf(stderr, "Usage: %s [options]\nOptions:\n -d        Include connect/disconnect messages in standard out\n -u <udid> Show only logs from a specific device\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
+    int c;
+    
+    static struct option long_options[] =
+    {
+        {"udid", required_argument, NULL, 'u'},
+        {"simulator", required_argument, NULL, 's'},
+        {"help", no_argument, NULL, 'h'},
+        {"debug", no_argument, (int*)&debug, 1},
+        {"use-separators", no_argument, (int*)&use_separators, 1},
+        {NULL, 0, NULL, 0}
+    };
+    
+    int option_index = 0;
+    
+    while((c = getopt_long(argc, argv, "u:s:", long_options, &option_index)) != -1){
+        switch (c){
+            case 0:
+                break;
+            case 'u':
+                if(requiredDeviceId)
+                        CFRelease(requiredDeviceId);
+                requiredDeviceId = CFStringCreateWithCString(kCFAllocatorDefault, optarg, kCFStringEncodingASCII);
+                break;
+            case 's':
+                if(simulatorVersion)
+                    CFRelease(simulatorVersion);
+                simulatorVersion = CFStringCreateWithCString(kCFAllocatorDefault, optarg, kCFStringEncodingASCII);
+                break;
+            case 'h':
+            case '?':
+                goto usage;
+                break;
+            default:
+                abort();
+        }
+    }
+    
+    if(requiredDeviceId && simulatorVersion){
+        fprintf(stderr, "Error: --simulator and --udid cannot be used simultaneously.\n");
         return 1;
     }
-    int c;
-    bool use_separators = false;
-    while ((c = getopt(argc, argv, "dsu:")) != -1)
-        switch (c)
-    {
-        case 'd':
-            debug = 1;
-            break;
-        case 's':
-            use_separators = true;
-            break;
-        case 'u':
-            if (requiredDeviceId)
-                CFRelease(requiredDeviceId);
-            requiredDeviceId = CFStringCreateWithCString(kCFAllocatorDefault, optarg, kCFStringEncodingASCII);
-            break;
-        case '?':
-            if (optopt == 'u')
-                fprintf(stderr, "Option -%c requires an argument.\n", optopt);
-            else if (isprint(optopt))
-                fprintf(stderr, "Unknown option `-%c'.\n", optopt);
-            else
-                fprintf(stderr, "Unknown option character `\\x%x'.\n", optopt);
-            return 1;
-        default:
-            abort();
-    }
+    
     if (isatty(1)) {
         printMessage = &write_colored;
         printSeparator = use_separators ? &color_separator : &no_separator;
@@ -304,7 +317,7 @@ int main (int argc, char * const argv[])
         printSeparator = use_separators ? &plain_separator : &no_separator;
     }
     
-    if(simulator){
+    if(simulatorVersion){
         log_local();
     }else{
         liveConnections = CFDictionaryCreateMutable(kCFAllocatorDefault, 0, NULL, NULL);
@@ -313,4 +326,8 @@ int main (int argc, char * const argv[])
     }
     CFRunLoopRun();
     return 0;
+    
+usage:
+    fprintf(stderr, "Usage: %s [options]\nOptions:\n --udid <udid>         Show only logs from a specific device\n --simulator <version> Show logs from iOS simulator\n --debug               Include connect/disconnect messages in standard out\n --use-separators      Skip one line between each line.\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
+    return 1;
 }
