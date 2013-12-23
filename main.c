@@ -250,6 +250,7 @@ void simulator_write_callback(char *p, size_t size){
     memcpy(&buffer, p, size);
 
     printMessage(1, buffer, size);
+    printSeparator(1);
 }
 
 static void log_simulator(){
@@ -313,6 +314,10 @@ int main (int argc, char * const argv[])
     if(requiredDeviceId && simulatorLogPath){
         fprintf(stderr, "Error: --simulator and --udid cannot be used simultaneously.\n");
         return 1;
+    }
+    
+    if(simulatorLogPath && debug){
+        printf("Warning: ignoring --debug flag due to --simulator.\n");
     }
     
     if (isatty(1)) {
