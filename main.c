@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <getopt.h>
 #include <sys/stat.h>
+#include <pwd.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include "MobileDevice.h"
 #include "extern.h"
@@ -15,7 +16,7 @@ typedef struct {
 static CFMutableDictionaryRef liveConnections;
 static int debug;
 static bool use_separators;
-static CFStringRef simulatorVersion;
+static char *simulatorVersion;
 static CFStringRef requiredDeviceId;
 static void (*printMessage)(int fd, const char *, size_t);
 static void (*printSeparator)(int fd);
@@ -291,10 +292,12 @@ int main (int argc, char * const argv[])
                 requiredDeviceId = CFStringCreateWithCString(kCFAllocatorDefault, optarg, kCFStringEncodingASCII);
                 break;
             case 's':
-                if(simulatorVersion)
-                    CFRelease(simulatorVersion);
-                simulatorVersion = CFStringCreateWithCString(kCFAllocatorDefault, optarg, kCFStringEncodingASCII);
+            {
+                int pathLength = strlen(optarg) + strlen(getpwuid(getuid())->pw_dir) + strlen("/Library/Logs/iOS Simulator//system.log");
+                simulatorVersion = malloc(pathLength + 1);/* Don't forget null terminator! */
+                sprintf(simulatorVersion, "%s/Library/Logs/iOS Simulator/%s/system.log", getpwuid(getuid())->pw_dir, optarg);
                 break;
+            }
             case 'h':
             case '?':
                 goto usage;
