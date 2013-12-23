@@ -5,6 +5,7 @@
 #include <pwd.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include "MobileDevice.h"
+
 #include "extern.h"
 
 typedef struct {
@@ -66,7 +67,7 @@ static void write_colored(int fd, const char *buffer, size_t length)
     size_t space_offsets[3];
     int o = 0;
     for (size_t i = 16; i < length; i++) {
-        if (buffer[i] == ' ') {
+        if (buffer[i] == ' ' && (buffer[i + 1] != '(')) { /* In the simulator, some lines have dual process entries. (e.g. Evans-MacBook-Pro launchd[36979] (com.apple.mobilegestalt.xpc[37004])*/
             space_offsets[o++] = i;
             if (o == 3) {
                 break;
@@ -243,13 +244,12 @@ static void color_separator(int fd)
     write_const(fd, COLOR_DARK_WHITE "--" COLOR_RESET "\n");
 }
 
-void local_write_callback(char *p, size_t size){
+void simulator_write_callback(char *p, size_t size){
     char buffer[size];
     bzero(buffer, sizeof(buffer));
     memcpy(&buffer, p, size);
-    
+
     printMessage(1, buffer, size);
-    
 }
 
 static void log_simulator(){
@@ -260,14 +260,7 @@ static void log_simulator(){
         return;
     }
     
-    struct stat sb;
-    
-    rflag = 0;
-    fflag = 1;
-    
-    enum STYLE style = RLINES;
-    forward(fp, style, 0, &sb);
-    
+    log_tail(fp);
     fclose(fp);
 }
 
