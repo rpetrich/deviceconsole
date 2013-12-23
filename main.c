@@ -16,7 +16,7 @@ typedef struct {
 static CFMutableDictionaryRef liveConnections;
 static int debug;
 static bool use_separators;
-static char *simulatorVersion;
+static char *simulatorLogPath;
 static CFStringRef requiredDeviceId;
 static void (*printMessage)(int fd, const char *, size_t);
 static void (*printSeparator)(int fd);
@@ -252,8 +252,13 @@ void local_write_callback(char *p, size_t size){
     
 }
 
-static void log_local(){
-    FILE *fp = fopen("/Users/eswick/Library/Logs/iOS Simulator/7.0.3/system.log", "r");
+static void log_simulator(){
+    FILE *fp = fopen(simulatorLogPath, "r");
+    
+    if(fp == NULL){
+        fprintf(stderr, "Error: Could not open simulator log: %s", simulatorLogPath);
+        return;
+    }
     
     struct stat sb;
     
@@ -294,8 +299,13 @@ int main (int argc, char * const argv[])
             case 's':
             {
                 int pathLength = strlen(optarg) + strlen(getpwuid(getuid())->pw_dir) + strlen("/Library/Logs/iOS Simulator//system.log");
-                simulatorVersion = malloc(pathLength + 1);/* Don't forget null terminator! */
-                sprintf(simulatorVersion, "%s/Library/Logs/iOS Simulator/%s/system.log", getpwuid(getuid())->pw_dir, optarg);
+                simulatorLogPath = malloc(pathLength + 1);/* Don't forget null terminator! */
+                sprintf(simulatorLogPath, "%s/Library/Logs/iOS Simulator/%s/system.log", getpwuid(getuid())->pw_dir, optarg);
+                
+                if(access(simulatorLogPath, F_OK) == -1){
+                    fprintf(stderr, "Error: Log for iOS Simulator version %s not found.\n", optarg);
+                    return 1;
+                }
                 break;
             }
             case 'h':
@@ -307,7 +317,7 @@ int main (int argc, char * const argv[])
         }
     }
     
-    if(requiredDeviceId && simulatorVersion){
+    if(requiredDeviceId && simulatorLogPath){
         fprintf(stderr, "Error: --simulator and --udid cannot be used simultaneously.\n");
         return 1;
     }
@@ -320,8 +330,9 @@ int main (int argc, char * const argv[])
         printSeparator = use_separators ? &plain_separator : &no_separator;
     }
     
-    if(simulatorVersion){
-        log_local();
+    if(simulatorLogPath){
+        log_simulator();
+        return 1;
     }else{
         liveConnections = CFDictionaryCreateMutable(kCFAllocatorDefault, 0, NULL, NULL);
         am_device_notification *notification;
@@ -331,6 +342,6 @@ int main (int argc, char * const argv[])
     return 0;
     
 usage:
-    fprintf(stderr, "Usage: %s [options]\nOptions:\n --udid <udid>         Show only logs from a specific device\n --simulator <version> Show logs from iOS simulator\n --debug               Include connect/disconnect messages in standard out\n --use-separators      Skip one line between each line.\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
+    fprintf(stderr, "Usage: %s [options]\nOptions:\n --udid <udid>          Show only logs from a specific device\n --simulator <version>  Show logs from iOS Simulator\n --debug                Include connect/disconnect messages in standard out\n --use-separators       Skip a line between each line.\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
     return 1;
 }
