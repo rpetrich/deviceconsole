@@ -59,7 +59,9 @@ static void write_colored(int fd, const char *buffer, size_t length)
     }
     size_t space_offsets[3];
     int o = 0;
-    for (size_t i = 16; i < length; i++) {
+    
+    size_t i;
+    for (i = 16; i < length; i++) {
         if (buffer[i] == ' ') {
             space_offsets[o++] = i;
             if (o == 3) {
@@ -73,7 +75,9 @@ static void write_colored(int fd, const char *buffer, size_t length)
         write_fully(fd, buffer, space_offsets[0]);
         // Log process name
         int pos = 0;
-        for (int i = space_offsets[0]; i < space_offsets[0]; i++) {
+        
+        int i;
+        for (i = space_offsets[0]; i < space_offsets[0]; i++) {
             if (buffer[i] == '[') {
                 pos = i;
                 break;
