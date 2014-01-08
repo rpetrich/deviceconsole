@@ -245,11 +245,15 @@ int main (int argc, char * const argv[])
     }
     int c;
     bool use_separators = false;
-    while ((c = getopt(argc, argv, "dsu:")) != -1)
+    bool force_color = false;
+    while ((c = getopt(argc, argv, "dcsu:")) != -1)
         switch (c)
     {
         case 'd':
             debug = 1;
+            break;
+        case 'c':
+            force_color = true;
             break;
         case 's':
             use_separators = true;
@@ -270,7 +274,7 @@ int main (int argc, char * const argv[])
         default:
             abort();
     }
-    if (isatty(1)) {
+    if (force_color || isatty(1)) {
         printMessage = &write_colored;
         printSeparator = use_separators ? &color_separator : &no_separator;
     } else {
