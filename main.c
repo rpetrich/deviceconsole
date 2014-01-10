@@ -12,6 +12,7 @@ typedef struct {
 static CFMutableDictionaryRef liveConnections;
 static int debug;
 static CFStringRef requiredDeviceId;
+static char requiredProcessName[256];
 static void (*printMessage)(int fd, const char *, size_t);
 static void (*printSeparator)(int fd);
 
@@ -68,6 +69,21 @@ static void write_colored(int fd, const char *buffer, size_t length)
         }
     }
     if (o == 3) {
+        
+        // Check whether process name matches the one passed to -p option and filter if needed (better than grep, because will easily include multiline output)
+        if (strlen(requiredProcessName))
+        {
+            char processName[256];
+            memset(processName, '\0', 256);
+            memcpy(processName, buffer + space_offsets[0] + 1, space_offsets[1] - space_offsets[0]);
+            for (int i=strlen(processName); i!=0; i--)
+                if (processName[i]=='[')
+                    processName[i]='\0';
+            
+            if (strcmp(processName, requiredProcessName)!=0)
+                return;
+        }
+        
         // Log date and device name
         write_const(fd, COLOR_DARK_WHITE);
         write_fully(fd, buffer, space_offsets[0]);
@@ -240,13 +256,14 @@ static void color_separator(int fd)
 int main (int argc, char * const argv[])
 {
     if ((argc == 2) && (strcmp(argv[1], "--help") == 0)) {
-        fprintf(stderr, "Usage: %s [options]\nOptions:\n -d        Include connect/disconnect messages in standard out\n -u <udid> Show only logs from a specific device\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
+        fprintf(stderr, "Usage: %s [options]\nOptions:\n -d\t\t\tInclude connect/disconnect messages in standard out\n -u <udid>\t\tShow only logs from a specific device\n -p <process name>\tShow only logs from a specific process\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
         return 1;
     }
     int c;
     bool use_separators = false;
     bool force_color = false;
-    while ((c = getopt(argc, argv, "dcsu:")) != -1)
+    memset(requiredProcessName, '\0', 256);
+    while ((c = getopt(argc, argv, "dcsu:p:")) != -1)
         switch (c)
     {
         case 'd':
@@ -262,6 +279,9 @@ int main (int argc, char * const argv[])
             if (requiredDeviceId)
                 CFRelease(requiredDeviceId);
             requiredDeviceId = CFStringCreateWithCString(kCFAllocatorDefault, optarg, kCFStringEncodingASCII);
+            break;
+        case 'p':
+            strcpy(requiredProcessName, optarg);
             break;
         case '?':
             if (optopt == 'u')
