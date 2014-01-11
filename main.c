@@ -32,6 +32,45 @@ static inline void write_string(int fd, const char *string)
     write_fully(fd, string, strlen(string));
 }
 
+static int find_space_offsets(const char *buffer, size_t length, size_t *space_offsets_out)
+{
+    int o = 0;
+    for (size_t i = 16; i < length; i++) {
+        if (buffer[i] == ' ') {
+            space_offsets_out[o++] = i;
+            if (o == 3) {
+                break;
+            }
+        }
+    }
+    return o;
+}
+static unsigned char should_print_message(const char *buffer, size_t length)
+{
+    if (length < 3) return 0; // don't want blank lines
+    
+    size_t space_offsets[3];
+    find_space_offsets(buffer, length, space_offsets);
+    
+    // Check whether process name matches the one passed to -p option and filter if needed
+    if (strlen(requiredProcessName)) {
+        char processName[256];
+        memset(processName, '\0', 256);
+        memcpy(processName, buffer + space_offsets[0] + 1, space_offsets[1] - space_offsets[0]);
+        for (int i=strlen(processName); i!=0; i--)
+            if (processName[i]=='[')
+                processName[i]='\0';
+        
+        if (strcmp(processName, requiredProcessName)!=0)
+            return 0;
+    }
+    
+    // More filtering options can be added here and return 0 when they won't meed filter criteria
+    
+    return 1;
+    
+}
+
 #define write_const(fd, text) write_fully(fd, text, sizeof(text)-1)
 
 #define COLOR_RESET         "\e[m"
@@ -59,30 +98,9 @@ static void write_colored(int fd, const char *buffer, size_t length)
         return;
     }
     size_t space_offsets[3];
-    int o = 0;
-    for (size_t i = 16; i < length; i++) {
-        if (buffer[i] == ' ') {
-            space_offsets[o++] = i;
-            if (o == 3) {
-                break;
-            }
-        }
-    }
+    int o = find_space_offsets(buffer, length, space_offsets);
+    
     if (o == 3) {
-        
-        // Check whether process name matches the one passed to -p option and filter if needed (better than grep, because will easily include multiline output)
-        if (strlen(requiredProcessName))
-        {
-            char processName[256];
-            memset(processName, '\0', 256);
-            memcpy(processName, buffer + space_offsets[0] + 1, space_offsets[1] - space_offsets[0]);
-            for (int i=strlen(processName); i!=0; i--)
-                if (processName[i]=='[')
-                    processName[i]='\0';
-            
-            if (strcmp(processName, requiredProcessName)!=0)
-                return;
-        }
         
         // Log date and device name
         write_const(fd, COLOR_DARK_WHITE);
@@ -142,7 +160,6 @@ static void write_colored(int fd, const char *buffer, size_t length)
         write_fully(fd, buffer, length);
     }
 }
-
 static void SocketCallback(CFSocketRef s, CFSocketCallBackType type, CFDataRef address, const void *data, void *info)
 {
     // Skip null bytes
@@ -159,8 +176,12 @@ static void SocketCallback(CFSocketRef s, CFSocketCallBackType type, CFDataRef a
         while ((buffer[extentLength] != '\0') && extentLength != length) {
             extentLength++;
         }
-        printMessage(1, buffer, extentLength);
-        printSeparator(1);
+        
+        if (should_print_message(buffer, extentLength)) {
+            printMessage(1, buffer, extentLength);
+            printSeparator(1);
+        }
+        
         length -= extentLength;
         buffer += extentLength;
     }
