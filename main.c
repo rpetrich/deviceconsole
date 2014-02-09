@@ -17,8 +17,10 @@ typedef struct {
 static CFMutableDictionaryRef liveConnections;
 static int debug;
 static bool use_separators;
+static bool force_color = false;
 static char *simulatorLogPath;
 static CFStringRef requiredDeviceId;
+static char requiredProcessName[256];
 static void (*printMessage)(int fd, const char *, size_t);
 static void (*printSeparator)(int fd);
 
@@ -36,6 +38,47 @@ static inline void write_fully(int fd, const char *buffer, size_t length)
 static inline void write_string(int fd, const char *string)
 {
     write_fully(fd, string, strlen(string));
+}
+
+static int find_space_offsets(const char *buffer, size_t length, size_t *space_offsets_out)
+{
+    int o = 0;
+    for (size_t i = 16; i < length; i++) {
+        if (buffer[i] == ' ') {
+            space_offsets_out[o++] = i;
+            if (o == 3) {
+                break;
+            }
+        }
+    }
+    
+    return o;
+}
+static unsigned char should_print_message(const char *buffer, size_t length)
+{
+    if (length < 3) 
+        return 0; // don't want blank lines
+    
+    size_t space_offsets[3];
+    find_space_offsets(buffer, length, space_offsets);
+    
+    // Check whether process name matches the one passed to -p option and filter if needed
+    if (strlen(requiredProcessName)) {
+        char processName[256];
+        memset(processName, '\0', 256);
+        memcpy(processName, buffer + space_offsets[0] + 1, space_offsets[1] - space_offsets[0]);
+        for (int i = strlen(processName); i != 0; i--)
+            if (processName[i] == '[')
+                processName[i] = '\0';
+        
+        if (strcmp(processName, requiredProcessName) != 0)
+            return 0;
+    }
+    
+    // More filtering options can be added here and return 0 when they won't meed filter criteria
+    
+    return 1;
+    
 }
 
 #define write_const(fd, text) write_fully(fd, text, sizeof(text)-1)
@@ -64,17 +107,12 @@ static void write_colored(int fd, const char *buffer, size_t length)
         write_fully(fd, buffer, length);
         return;
     }
+
     size_t space_offsets[3];
-    int o = 0;
-    for (size_t i = 16; i < length; i++) {
-        if (buffer[i] == ' ' && (buffer[i + 1] != '(')) { /* In the simulator, some lines have dual process entries. (e.g. Evans-MacBook-Pro launchd[36979] (com.apple.mobilegestalt.xpc[37004])*/
-            space_offsets[o++] = i;
-            if (o == 3) {
-                break;
-            }
-        }
-    }
+    int o = find_space_offsets(buffer, length, space_offsets);
+    
     if (o == 3) {
+        
         // Log date and device name
         write_const(fd, COLOR_DARK_WHITE);
         write_fully(fd, buffer, space_offsets[0]);
@@ -133,7 +171,6 @@ static void write_colored(int fd, const char *buffer, size_t length)
         write_fully(fd, buffer, length);
     }
 }
-
 static void SocketCallback(CFSocketRef s, CFSocketCallBackType type, CFDataRef address, const void *data, void *info)
 {
     // Skip null bytes
@@ -150,8 +187,12 @@ static void SocketCallback(CFSocketRef s, CFSocketCallBackType type, CFDataRef a
         while ((buffer[extentLength] != '\0') && extentLength != length) {
             extentLength++;
         }
-        printMessage(1, buffer, extentLength);
-        printSeparator(1);
+        
+        if (should_print_message(buffer, extentLength)) {
+            printMessage(1, buffer, extentLength);
+            printSeparator(1);
+        }
+        
         length -= extentLength;
         buffer += extentLength;
     }
@@ -249,8 +290,11 @@ void simulator_write_callback(char *p, size_t size){
     bzero(buffer, sizeof(buffer));
     memcpy(&buffer, p, size);
 
-    printMessage(1, buffer, size);
-    printSeparator(1);
+
+    if (should_print_message(buffer, size)) {
+        printMessage(1, buffer, size);
+        printSeparator(1);
+    }
 }
 
 static void log_simulator(){
@@ -273,15 +317,19 @@ int main (int argc, char * const argv[])
     {
         {"udid", required_argument, NULL, 'u'},
         {"simulator", required_argument, NULL, 's'},
+        {"process", required_argument, NULL, 'p'},
         {"help", no_argument, NULL, 'h'},
         {"debug", no_argument, (int*)&debug, 1},
         {"use-separators", no_argument, (int*)&use_separators, 1},
+        {"force-color", no_argument, (int*)&force_color, 1},
         {NULL, 0, NULL, 0}
     };
     
     int option_index = 0;
+
+    memset(requiredProcessName, '\0', 256);
     
-    while((c = getopt_long(argc, argv, "u:s:", long_options, &option_index)) != -1){
+    while((c = getopt_long(argc, argv, "u:s:p:", long_options, &option_index)) != -1){
         switch (c){
             case 0:
                 break;
@@ -302,6 +350,9 @@ int main (int argc, char * const argv[])
                 }
                 break;
             }
+            case 'p':
+                strcpy(requiredProcessName, optarg);
+                break;
             case 'h':
             case '?':
                 goto usage;
@@ -320,7 +371,7 @@ int main (int argc, char * const argv[])
         printf("Warning: ignoring --debug flag due to --simulator.\n");
     }
     
-    if (isatty(1)) {
+    if (force_color || isatty(1)) {
         printMessage = &write_colored;
         printSeparator = use_separators ? &color_separator : &no_separator;
     } else {
@@ -340,6 +391,6 @@ int main (int argc, char * const argv[])
     return 0;
     
 usage:
-    fprintf(stderr, "Usage: %s [options]\nOptions:\n --udid <udid>          Show only logs from a specific device\n --simulator <version>  Show logs from iOS Simulator\n --debug                Include connect/disconnect messages in standard out\n --use-separators       Skip a line between each line.\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
+    fprintf(stderr, "Usage: %s [options]\nOptions:\n --udid <udid>          Show only logs from a specific device\n --simulator <version>  Show logs from iOS Simulator\n --debug                Include connect/disconnect messages in standard out\n --use-separators       Skip a line between each line.\n --process              Filter by process name.\n --force-color          Force colored text.\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
     return 1;
 }
