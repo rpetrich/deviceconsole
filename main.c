@@ -1,7 +1,12 @@
 #include <stdio.h>
 #include <unistd.h>
+#include <getopt.h>
+#include <sys/stat.h>
+#include <pwd.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include "MobileDevice.h"
+
+#include "extern.h"
 
 typedef struct {
     service_conn_t connection;
@@ -11,8 +16,11 @@ typedef struct {
 
 static CFMutableDictionaryRef liveConnections;
 static int debug;
+static bool use_separators;
+static bool force_color = false;
+static char *simulatorLogPath;
 static CFStringRef requiredDeviceId;
-static char requiredProcessName[256];
+static char *requiredProcessName;
 static void (*printMessage)(int fd, const char *, size_t);
 static void (*printSeparator)(int fd);
 
@@ -43,32 +51,39 @@ static int find_space_offsets(const char *buffer, size_t length, size_t *space_o
             }
         }
     }
+
     return o;
 }
 static unsigned char should_print_message(const char *buffer, size_t length)
 {
-    if (length < 3) return 0; // don't want blank lines
+    if (length < 3) 
+        return 0; // don't want blank lines
     
     size_t space_offsets[3];
     find_space_offsets(buffer, length, space_offsets);
     
     // Check whether process name matches the one passed to -p option and filter if needed
-    if (strlen(requiredProcessName)) {
-        char processName[256];
-        memset(processName, '\0', 256);
-        memcpy(processName, buffer + space_offsets[0] + 1, space_offsets[1] - space_offsets[0]);
-        for (int i=strlen(processName); i!=0; i--)
-            if (processName[i]=='[')
-                processName[i]='\0';
+    if (requiredProcessName != NULL) {
+        int nameLength = space_offsets[1] - space_offsets[0]; //This size includes the NULL terminator.
         
-        if (strcmp(processName, requiredProcessName)!=0)
+        char *processName = malloc(nameLength);
+        processName[nameLength - 1] = '\0';
+        memcpy(processName, buffer + space_offsets[0] + 1, nameLength - 1);
+
+        for (int i = strlen(processName); i != 0; i--)
+            if (processName[i] == '[')
+                processName[i] = '\0';
+        
+        if (strcmp(processName, requiredProcessName) != 0){
+            free(processName);
             return 0;
+        }
+        free(processName);
     }
     
     // More filtering options can be added here and return 0 when they won't meed filter criteria
     
     return 1;
-    
 }
 
 #define write_const(fd, text) write_fully(fd, text, sizeof(text)-1)
@@ -97,6 +112,7 @@ static void write_colored(int fd, const char *buffer, size_t length)
         write_fully(fd, buffer, length);
         return;
     }
+
     size_t space_offsets[3];
     int o = find_space_offsets(buffer, length, space_offsets);
     
@@ -274,47 +290,93 @@ static void color_separator(int fd)
     write_const(fd, COLOR_DARK_WHITE "--" COLOR_RESET "\n");
 }
 
+void simulator_write_callback(char *p, size_t size){
+    char buffer[size];
+    bzero(buffer, sizeof(buffer));
+    memcpy(&buffer, p, size);
+
+
+    if (should_print_message(buffer, size)) {
+        printMessage(1, buffer, size);
+        printSeparator(1);
+    }
+}
+
+static void log_simulator(){
+    FILE *fp = fopen(simulatorLogPath, "r");
+    
+    if(fp == NULL){
+        fprintf(stderr, "Error: Could not open simulator log: %s", simulatorLogPath);
+        return;
+    }
+    
+    log_tail(fp);
+    fclose(fp);
+}
+
 int main (int argc, char * const argv[])
 {
-    if ((argc == 2) && (strcmp(argv[1], "--help") == 0)) {
-        fprintf(stderr, "Usage: %s [options]\nOptions:\n -d\t\t\tInclude connect/disconnect messages in standard out\n -u <udid>\t\tShow only logs from a specific device\n -p <process name>\tShow only logs from a specific process\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
+    int c;
+    
+    static struct option long_options[] =
+    {
+        {"udid", required_argument, NULL, 'u'},
+        {"simulator", required_argument, NULL, 's'},
+        {"process", required_argument, NULL, 'p'},
+        {"help", no_argument, NULL, 'h'},
+        {"debug", no_argument, (int*)&debug, 1},
+        {"use-separators", no_argument, (int*)&use_separators, 1},
+        {"force-color", no_argument, (int*)&force_color, 1},
+        {NULL, 0, NULL, 0}
+    };
+    
+    int option_index = 0;
+    
+    while((c = getopt_long(argc, argv, "u:s:p:", long_options, &option_index)) != -1){
+        switch (c){
+            case 0:
+                break;
+            case 'u':
+                if(requiredDeviceId)
+                        CFRelease(requiredDeviceId);
+                requiredDeviceId = CFStringCreateWithCString(kCFAllocatorDefault, optarg, kCFStringEncodingASCII);
+                break;
+            case 's':
+            {
+                int pathLength = strlen(optarg) + strlen(getpwuid(getuid())->pw_dir) + strlen("/Library/Logs/iOS Simulator//system.log");
+                simulatorLogPath = malloc(pathLength + 1);/* Don't forget null terminator! */
+                sprintf(simulatorLogPath, "%s/Library/Logs/iOS Simulator/%s/system.log", getpwuid(getuid())->pw_dir, optarg);
+                
+                if(access(simulatorLogPath, F_OK) == -1){
+                    fprintf(stderr, "Error: Log for iOS Simulator version %s not found.\n", optarg);
+                    return 1;
+                }
+                break;
+            }
+            case 'p':
+                requiredProcessName = malloc(strlen(optarg) + 1);
+                requiredProcessName[strlen(optarg)] = '\0';
+
+                strcpy(requiredProcessName, optarg);
+                break;
+            case 'h':
+            case '?':
+                goto usage;
+                break;
+            default:
+                abort();
+        }
+    }
+    
+    if(requiredDeviceId && simulatorLogPath){
+        fprintf(stderr, "Error: --simulator and --udid cannot be used simultaneously.\n");
         return 1;
     }
-    int c;
-    bool use_separators = false;
-    bool force_color = false;
-    memset(requiredProcessName, '\0', 256);
-    while ((c = getopt(argc, argv, "dcsu:p:")) != -1)
-        switch (c)
-    {
-        case 'd':
-            debug = 1;
-            break;
-        case 'c':
-            force_color = true;
-            break;
-        case 's':
-            use_separators = true;
-            break;
-        case 'u':
-            if (requiredDeviceId)
-                CFRelease(requiredDeviceId);
-            requiredDeviceId = CFStringCreateWithCString(kCFAllocatorDefault, optarg, kCFStringEncodingASCII);
-            break;
-        case 'p':
-            strcpy(requiredProcessName, optarg);
-            break;
-        case '?':
-            if (optopt == 'u')
-                fprintf(stderr, "Option -%c requires an argument.\n", optopt);
-            else if (isprint(optopt))
-                fprintf(stderr, "Unknown option `-%c'.\n", optopt);
-            else
-                fprintf(stderr, "Unknown option character `\\x%x'.\n", optopt);
-            return 1;
-        default:
-            abort();
+    
+    if(simulatorLogPath && debug){
+        printf("Warning: ignoring --debug flag due to --simulator.\n");
     }
+    
     if (force_color || isatty(1)) {
         printMessage = &write_colored;
         printSeparator = use_separators ? &color_separator : &no_separator;
@@ -322,9 +384,19 @@ int main (int argc, char * const argv[])
         printMessage = &write_fully;
         printSeparator = use_separators ? &plain_separator : &no_separator;
     }
-    liveConnections = CFDictionaryCreateMutable(kCFAllocatorDefault, 0, NULL, NULL);
-    am_device_notification *notification;
-    AMDeviceNotificationSubscribe(DeviceNotificationCallback, 0, 0, NULL, &notification);
+    
+    if(simulatorLogPath){
+        log_simulator();
+        return 1;
+    }else{
+        liveConnections = CFDictionaryCreateMutable(kCFAllocatorDefault, 0, NULL, NULL);
+        am_device_notification *notification;
+        AMDeviceNotificationSubscribe(DeviceNotificationCallback, 0, 0, NULL, &notification);
+    }
     CFRunLoopRun();
     return 0;
+    
+usage:
+    fprintf(stderr, "Usage: %s [options]\nOptions:\n --udid <udid>          Show only logs from a specific device\n --simulator <version>  Show logs from iOS Simulator\n --debug                Include connect/disconnect messages in standard out\n --use-separators       Skip a line between each line.\n --process              Filter by process name.\n --force-color          Force colored text.\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
+    return 1;
 }
