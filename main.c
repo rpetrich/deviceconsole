@@ -13,6 +13,7 @@ static CFMutableDictionaryRef liveConnections;
 static int debug;
 static CFStringRef requiredDeviceId;
 static char requiredProcessName[256];
+static char requiredString[256];
 static void (*printMessage)(int fd, const char *, size_t);
 static void (*printSeparator)(int fd);
 
@@ -63,6 +64,12 @@ static unsigned char should_print_message(const char *buffer, size_t length)
         
         if (strcmp(processName, requiredProcessName)!=0)
             return 0;
+    }
+    
+    if (strlen(requiredString)) {
+        if (strnstr(buffer,requiredString,strlen(buffer)) == NULL) {
+            return 0;
+        }
     }
     
     // More filtering options can be added here and return 0 when they won't meed filter criteria
@@ -277,14 +284,14 @@ static void color_separator(int fd)
 int main (int argc, char * const argv[])
 {
     if ((argc == 2) && (strcmp(argv[1], "--help") == 0)) {
-        fprintf(stderr, "Usage: %s [options]\nOptions:\n -d\t\t\tInclude connect/disconnect messages in standard out\n -u <udid>\t\tShow only logs from a specific device\n -p <process name>\tShow only logs from a specific process\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
+        fprintf(stderr, "Usage: %s [options]\nOptions:\n -d\t\t\tInclude connect/disconnect messages in standard out\n -u <udid>\t\tShow only logs from a specific device\n -p <process name>\tShow only logs from a specific process\n -i <string>\t\tPrint only lines which contain the string\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
         return 1;
     }
     int c;
     bool use_separators = false;
     bool force_color = false;
     memset(requiredProcessName, '\0', 256);
-    while ((c = getopt(argc, argv, "dcsu:p:")) != -1)
+    while ((c = getopt(argc, argv, "dcsu:p:i:")) != -1)
         switch (c)
     {
         case 'd':
@@ -303,6 +310,9 @@ int main (int argc, char * const argv[])
             break;
         case 'p':
             strcpy(requiredProcessName, optarg);
+            break;
+        case 'i':
+            strcpy(requiredString, optarg);
             break;
         case '?':
             if (optopt == 'u')
