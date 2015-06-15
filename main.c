@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include "MobileDevice.h"
+#include <regex.h>
 
 typedef struct {
     service_conn_t connection;
@@ -13,6 +14,7 @@ static CFMutableDictionaryRef liveConnections;
 static int debug;
 static CFStringRef requiredDeviceId;
 static char requiredProcessName[256];
+static regex_t requiredProcessNamePattern;
 static void (*printMessage)(int fd, const char *, size_t);
 static void (*printSeparator)(int fd);
 
@@ -61,7 +63,7 @@ static unsigned char should_print_message(const char *buffer, size_t length)
             if (processName[i]=='[')
                 processName[i]='\0';
         
-        if (strcmp(processName, requiredProcessName)!=0)
+        if (regexec(&requiredProcessNamePattern, processName, 0, NULL, 0))
             return 0;
     }
     
@@ -303,6 +305,10 @@ int main (int argc, char * const argv[])
             break;
         case 'p':
             strcpy(requiredProcessName, optarg);
+            if (regcomp(&requiredProcessNamePattern, requiredProcessName, REG_EXTENDED)) {
+                fprintf(stderr, "Could not compile regex\n");
+                return 1;
+            }
             break;
         case '?':
             if (optopt == 'u')
