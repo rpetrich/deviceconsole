@@ -12,7 +12,7 @@ typedef struct {
 static CFMutableDictionaryRef liveConnections;
 static int debug;
 static CFStringRef requiredDeviceId;
-static char requiredProcessName[256];
+static char *requiredProcessName;
 static void (*printMessage)(int fd, const char *, size_t);
 static void (*printSeparator)(int fd);
 
@@ -53,22 +53,27 @@ static unsigned char should_print_message(const char *buffer, size_t length)
     find_space_offsets(buffer, length, space_offsets);
     
     // Check whether process name matches the one passed to -p option and filter if needed
-    if (strlen(requiredProcessName)) {
-        char processName[256];
-        memset(processName, '\0', 256);
-        memcpy(processName, buffer + space_offsets[0] + 1, space_offsets[1] - space_offsets[0]);
-        for (int i=strlen(processName); i!=0; i--)
-            if (processName[i]=='[')
-                processName[i]='\0';
+    if (requiredProcessName != NULL) {
+        int nameLength = space_offsets[1] - space_offsets[0]; //This size includes the NULL terminator.
         
-        if (strcmp(processName, requiredProcessName)!=0)
+        char *processName = malloc(nameLength);
+        processName[nameLength - 1] = '\0';
+        memcpy(processName, buffer + space_offsets[0] + 1, nameLength - 1);
+
+        for (int i = strlen(processName); i != 0; i--)
+            if (processName[i] == '[')
+                processName[i] = '\0';
+        
+        if (strcmp(processName, requiredProcessName) != 0){
+            free(processName);
             return 0;
+        }
+        free(processName);
     }
     
     // More filtering options can be added here and return 0 when they won't meed filter criteria
     
     return 1;
-    
 }
 
 #define write_const(fd, text) write_fully(fd, text, sizeof(text)-1)
@@ -283,7 +288,7 @@ int main (int argc, char * const argv[])
     int c;
     bool use_separators = false;
     bool force_color = false;
-    memset(requiredProcessName, '\0', 256);
+
     while ((c = getopt(argc, argv, "dcsu:p:")) != -1)
         switch (c)
     {
@@ -302,6 +307,9 @@ int main (int argc, char * const argv[])
             requiredDeviceId = CFStringCreateWithCString(kCFAllocatorDefault, optarg, kCFStringEncodingASCII);
             break;
         case 'p':
+            requiredProcessName = malloc(strlen(optarg) + 1);
+            requiredProcessName[strlen(optarg)] = '\0';
+
             strcpy(requiredProcessName, optarg);
             break;
         case '?':
