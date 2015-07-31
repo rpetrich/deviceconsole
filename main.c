@@ -18,6 +18,24 @@ static regex_t *requiredRegex;
 static void (*printMessage)(int fd, const char *, size_t);
 static void (*printSeparator)(int fd);
 
+static char *COLOR_RESET = NULL;
+static char *COLOR_NORMAL = NULL;
+static char *COLOR_DARK = NULL;
+static char *COLOR_RED = NULL;
+static char *COLOR_DARK_RED = NULL;
+static char *COLOR_GREEN = NULL;
+static char *COLOR_DARK_GREEN = NULL;
+static char *COLOR_YELLOW = NULL;
+static char *COLOR_DARK_YELLOW = NULL;
+static char *COLOR_BLUE = NULL;
+static char *COLOR_DARK_BLUE = NULL;
+static char *COLOR_MAGENTA = NULL;
+static char *COLOR_DARK_MAGENTA = NULL;
+static char *COLOR_CYAN = NULL;
+static char *COLOR_DARK_CYAN = NULL;
+static char *COLOR_WHITE = NULL;
+static char *COLOR_DARK_WHITE = NULL;
+
 static inline void write_fully(int fd, const char *buffer, size_t length)
 {
     while (length) {
@@ -88,25 +106,29 @@ static unsigned char should_print_message(const char *buffer, size_t length)
     return should_print;
 }
 
-#define write_const(fd, text) write_fully(fd, text, sizeof(text)-1)
+#define write_const(fd, text) write_fully(fd, text, strlen(text))
+#define stringify(x) #x
+#define xcode_color_with_rgb(type, r, g, b) "\e[" type stringify(r) "," stringify(g) "," stringify(b) ";"
 
-#define COLOR_RESET         "\e[m"
-#define COLOR_NORMAL        "\e[0m"
-#define COLOR_DARK          "\e[2m"
-#define COLOR_RED           "\e[0;31m"
-#define COLOR_DARK_RED      "\e[2;31m"
-#define COLOR_GREEN         "\e[0;32m"
-#define COLOR_DARK_GREEN    "\e[2;32m"
-#define COLOR_YELLOW        "\e[0;33m"
-#define COLOR_DARK_YELLOW   "\e[2;33m"
-#define COLOR_BLUE          "\e[0;34m"
-#define COLOR_DARK_BLUE     "\e[2;34m"
-#define COLOR_MAGENTA       "\e[0;35m"
-#define COLOR_DARK_MAGENTA  "\e[2;35m"
-#define COLOR_CYAN          "\e[0;36m"
-#define COLOR_DARK_CYAN     "\e[2;36m"
-#define COLOR_WHITE         "\e[0;37m"
-#define COLOR_DARK_WHITE    "\e[0;37m"
+static void set_colors(xcode_colors) {
+    COLOR_RESET         = (xcode_colors) ? "\e[;"                                       :   "\e[m";
+    COLOR_NORMAL        = (xcode_colors) ? xcode_color_with_rgb("fg", 0, 0, 0)          :   "\e[0m";
+    COLOR_DARK          = (xcode_colors) ? xcode_color_with_rgb("fg", 207, 201, 189)    :   "\e[2m";
+    COLOR_RED           = (xcode_colors) ? xcode_color_with_rgb("fg", 255, 31, 2)       :   "\e[0;31m";
+    COLOR_DARK_RED      = (xcode_colors) ? xcode_color_with_rgb("fg", 148, 18, 1)       :   "\e[2;31m";
+    COLOR_GREEN         = (xcode_colors) ? xcode_color_with_rgb("fg", 2, 255, 14)       :   "\e[0;32m";
+    COLOR_DARK_GREEN    = (xcode_colors) ? xcode_color_with_rgb("fg", 1, 139, 8)        :   "\e[2;32m";
+    COLOR_YELLOW        = (xcode_colors) ? xcode_color_with_rgb("fg", 255, 228, 0)      :   "\e[0;33m";
+    COLOR_DARK_YELLOW   = (xcode_colors) ? xcode_color_with_rgb("fg", 167, 149, 1)      :   "\e[2;33m";
+    COLOR_BLUE          = (xcode_colors) ? xcode_color_with_rgb("fg", 0, 0, 255)        :   "\e[0;34m";
+    COLOR_DARK_BLUE     = (xcode_colors) ? xcode_color_with_rgb("fg", 0, 0, 100)        :   "\e[2;34m";
+    COLOR_MAGENTA       = (xcode_colors) ? xcode_color_with_rgb("fg", 213, 149, 139)    :   "\e[0;35m";
+    COLOR_DARK_MAGENTA  = (xcode_colors) ? xcode_color_with_rgb("fg", 145, 100, 165)    :   "\e[2;35m";
+    COLOR_CYAN          = (xcode_colors) ? xcode_color_with_rgb("fg", 45, 253, 255)     :   "\e[0;36m";
+    COLOR_DARK_CYAN     = (xcode_colors) ? xcode_color_with_rgb("fg", 34, 129, 128)     :   "\e[2;36m";
+    COLOR_WHITE         = (xcode_colors) ? xcode_color_with_rgb("fg", 255, 255, 255)    :   "\e[0;37m";
+    COLOR_DARK_WHITE    = (xcode_colors) ? xcode_color_with_rgb("fg", 180, 180, 180)    :   "\e[0;37m";
+}
 
 static void write_colored(int fd, const char *buffer, size_t length)
 {
@@ -288,7 +310,12 @@ static void plain_separator(int fd)
 
 static void color_separator(int fd)
 {
-    write_const(fd, COLOR_DARK_WHITE "--" COLOR_RESET "\n");
+    size_t buffer_lentgh = sizeof(char) * (strlen(COLOR_DARK_WHITE) + strlen(COLOR_RESET) + 3);
+    char *buffer = malloc(buffer_lentgh);
+    sprintf(buffer, "%s--%s\n", COLOR_DARK_WHITE, COLOR_RESET);
+    
+    write_const(fd, buffer);
+    free(buffer);
 }
 
 int main (int argc, char * const argv[])
@@ -299,9 +326,10 @@ int main (int argc, char * const argv[])
     }
     int c;
     bool use_separators = false;
-    bool force_color = false;
+    bool force_color = isatty(1);
+    bool xcode_colors = (getenv("XcodeColors"));
 
-    while ((c = getopt(argc, argv, "dcsu:p:r:")) != -1)
+    while ((c = getopt(argc, argv, "dcxsu:p:r:")) != -1)
         switch (c)
     {
         case 'd':
@@ -309,6 +337,9 @@ int main (int argc, char * const argv[])
             break;
         case 'c':
             force_color = true;
+            break;
+        case 'x':
+            xcode_colors = true;
             break;
         case 's':
             use_separators = true;
@@ -342,7 +373,8 @@ int main (int argc, char * const argv[])
         default:
             abort();
     }
-    if (force_color || isatty(1)) {
+    if (force_color || xcode_colors) {
+        set_colors(xcode_colors);
         printMessage = &write_colored;
         printSeparator = use_separators ? &color_separator : &no_separator;
     } else {
