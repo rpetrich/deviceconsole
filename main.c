@@ -113,21 +113,21 @@ static unsigned char should_print_message(const char *buffer, size_t length)
 static void set_colors(xcode_colors) {
     COLOR_RESET         = (xcode_colors) ? "\e[;"                                       :   "\e[m";
     COLOR_NORMAL        = (xcode_colors) ? xcode_color_with_rgb("fg", 0, 0, 0)          :   "\e[0m";
-    COLOR_DARK          = (xcode_colors) ? xcode_color_with_rgb("fg", 207, 201, 189)    :   "\e[2m";
-    COLOR_RED           = (xcode_colors) ? xcode_color_with_rgb("fg", 255, 31, 2)       :   "\e[0;31m";
-    COLOR_DARK_RED      = (xcode_colors) ? xcode_color_with_rgb("fg", 148, 18, 1)       :   "\e[2;31m";
-    COLOR_GREEN         = (xcode_colors) ? xcode_color_with_rgb("fg", 2, 255, 14)       :   "\e[0;32m";
-    COLOR_DARK_GREEN    = (xcode_colors) ? xcode_color_with_rgb("fg", 1, 139, 8)        :   "\e[2;32m";
-    COLOR_YELLOW        = (xcode_colors) ? xcode_color_with_rgb("fg", 255, 228, 0)      :   "\e[0;33m";
-    COLOR_DARK_YELLOW   = (xcode_colors) ? xcode_color_with_rgb("fg", 167, 149, 1)      :   "\e[2;33m";
-    COLOR_BLUE          = (xcode_colors) ? xcode_color_with_rgb("fg", 0, 0, 255)        :   "\e[0;34m";
-    COLOR_DARK_BLUE     = (xcode_colors) ? xcode_color_with_rgb("fg", 0, 0, 100)        :   "\e[2;34m";
-    COLOR_MAGENTA       = (xcode_colors) ? xcode_color_with_rgb("fg", 213, 149, 139)    :   "\e[0;35m";
-    COLOR_DARK_MAGENTA  = (xcode_colors) ? xcode_color_with_rgb("fg", 145, 100, 165)    :   "\e[2;35m";
-    COLOR_CYAN          = (xcode_colors) ? xcode_color_with_rgb("fg", 45, 253, 255)     :   "\e[0;36m";
-    COLOR_DARK_CYAN     = (xcode_colors) ? xcode_color_with_rgb("fg", 34, 129, 128)     :   "\e[2;36m";
-    COLOR_WHITE         = (xcode_colors) ? xcode_color_with_rgb("fg", 255, 255, 255)    :   "\e[0;37m";
-    COLOR_DARK_WHITE    = (xcode_colors) ? xcode_color_with_rgb("fg", 180, 180, 180)    :   "\e[0;37m";
+    COLOR_DARK          = (xcode_colors) ? xcode_color_with_rgb("fg", 102, 102, 102)    :   "\e[2m";
+    COLOR_RED           = (xcode_colors) ? xcode_color_with_rgb("fg", 151, 4, 12)       :   "\e[0;31m";
+    COLOR_DARK_RED      = (xcode_colors) ? xcode_color_with_rgb("fg", 227, 10, 23)       :   "\e[2;31m";
+    COLOR_GREEN         = (xcode_colors) ? xcode_color_with_rgb("fg", 23, 164, 26)       :   "\e[0;32m";
+    COLOR_DARK_GREEN    = (xcode_colors) ? xcode_color_with_rgb("fg", 33, 215, 38)        :   "\e[2;32m";
+    COLOR_YELLOW        = (xcode_colors) ? xcode_color_with_rgb("fg", 153, 152, 29)      :   "\e[0;33m";
+    COLOR_DARK_YELLOW   = (xcode_colors) ? xcode_color_with_rgb("fg", 229, 228, 49)      :   "\e[2;33m";
+    COLOR_BLUE          = (xcode_colors) ? xcode_color_with_rgb("fg", 5, 22, 175)        :   "\e[0;34m";
+    COLOR_DARK_BLUE     = (xcode_colors) ? xcode_color_with_rgb("fg", 11, 36, 251)        :   "\e[2;34m";
+    COLOR_MAGENTA       = (xcode_colors) ? xcode_color_with_rgb("fg", 177, 25, 176)    :   "\e[0;35m";
+    COLOR_DARK_MAGENTA  = (xcode_colors) ? xcode_color_with_rgb("fg", 227, 25, 227)    :   "\e[2;35m";
+    COLOR_CYAN          = (xcode_colors) ? xcode_color_with_rgb("fg", 26, 166, 177)     :   "\e[0;36m";
+    COLOR_DARK_CYAN     = (xcode_colors) ? xcode_color_with_rgb("fg", 39, 229, 228)     :   "\e[2;36m";
+    COLOR_WHITE         = (xcode_colors) ? xcode_color_with_rgb("fg", 191, 191, 191)    :   "\e[0;37m";
+    COLOR_DARK_WHITE    = (xcode_colors) ? xcode_color_with_rgb("fg", 230, 229, 230)    :   "\e[0;37m";
 }
 
 static void write_colored(int fd, const char *buffer, size_t length)
@@ -321,13 +321,14 @@ static void color_separator(int fd)
 int main (int argc, char * const argv[])
 {
     if ((argc == 2) && (strcmp(argv[1], "--help") == 0)) {
-        fprintf(stderr, "Usage: %s [options]\nOptions:\n -d\t\t\tInclude connect/disconnect messages in standard out\n -u <udid>\t\tShow only logs from a specific device\n -p <process name>\tShow only logs from a specific process\n -r <regular expression>\tFilter messages by regular expression.\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
+        fprintf(stderr, "Usage: %s [options]\nOptions:\n -d\t\t\t\tInclude connect/disconnect messages in standard out\n -u <udid>\t\t\tShow only logs from a specific device\n -p <process name>\t\tShow only logs from a specific process\n -r <regular expression>\tFilter messages by regular expression.\n -x\t\t\t\tDisable tty coloring in Xcode (unless XcodeColors intalled).\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
         return 1;
     }
     int c;
     bool use_separators = false;
     bool force_color = isatty(1);
-    bool xcode_colors = (getenv("XcodeColors"));
+    bool xcode_colors = ((getenv("XcodeColors")) ? strstr(getenv("XcodeColors"), "YES") != NULL : false);
+    bool in_xcode = xcode_colors;
 
     while ((c = getopt(argc, argv, "dcxsu:p:r:")) != -1)
         switch (c)
@@ -339,7 +340,7 @@ int main (int argc, char * const argv[])
             force_color = true;
             break;
         case 'x':
-            xcode_colors = true;
+            in_xcode = true;
             break;
         case 's':
             use_separators = true;
@@ -373,7 +374,7 @@ int main (int argc, char * const argv[])
         default:
             abort();
     }
-    if (force_color || xcode_colors) {
+    if ((!in_xcode && force_color) || xcode_colors) {
         set_colors(xcode_colors);
         printMessage = &write_colored;
         printSeparator = use_separators ? &color_separator : &no_separator;
