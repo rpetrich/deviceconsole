@@ -327,7 +327,8 @@ int main (int argc, char * const argv[])
     int c;
     bool use_separators = false;
     bool force_color = isatty(1);
-    bool xcode_colors = (getenv("XcodeColors"));
+    bool xcode_colors = ((getenv("XcodeColors")) ? strstr(getenv("XcodeColors"), "YES") != NULL : false);
+    bool in_xcode = xcode_colors;
 
     while ((c = getopt(argc, argv, "dcxsu:p:r:")) != -1)
         switch (c)
@@ -339,7 +340,7 @@ int main (int argc, char * const argv[])
             force_color = true;
             break;
         case 'x':
-            xcode_colors = true;
+            in_xcode = true;
             break;
         case 's':
             use_separators = true;
@@ -373,7 +374,8 @@ int main (int argc, char * const argv[])
         default:
             abort();
     }
-    if (force_color || xcode_colors) {
+    
+    if ((!in_xcode && force_color) || xcode_colors) {
         set_colors(xcode_colors);
         printMessage = &write_colored;
         printSeparator = use_separators ? &color_separator : &no_separator;
