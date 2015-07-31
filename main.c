@@ -321,7 +321,7 @@ static void color_separator(int fd)
 int main (int argc, char * const argv[])
 {
     if ((argc == 2) && (strcmp(argv[1], "--help") == 0)) {
-        fprintf(stderr, "Usage: %s [options]\nOptions:\n -d\t\t\tInclude connect/disconnect messages in standard out\n -u <udid>\t\tShow only logs from a specific device\n -p <process name>\tShow only logs from a specific process\n -r <regular expression>\tFilter messages by regular expression.\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
+        fprintf(stderr, "Usage: %s [options]\nOptions:\n -d\t\t\t\tInclude connect/disconnect messages in standard out\n -u <udid>\t\t\tShow only logs from a specific device\n -p <process name>\t\tShow only logs from a specific process\n -r <regular expression>\tFilter messages by regular expression.\n -x\t\t\t\tDisable tty coloring in Xcode (unless XcodeColors intalled).\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
         return 1;
     }
     int c;
