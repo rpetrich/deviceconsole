@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <regex.h>
 #include <unistd.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include "MobileDevice.h"
@@ -13,8 +14,27 @@ static CFMutableDictionaryRef liveConnections;
 static int debug;
 static CFStringRef requiredDeviceId;
 static char *requiredProcessName;
+static regex_t *requiredRegex;
 static void (*printMessage)(int fd, const char *, size_t);
 static void (*printSeparator)(int fd);
+
+static char *COLOR_RESET = NULL;
+static char *COLOR_NORMAL = NULL;
+static char *COLOR_DARK = NULL;
+static char *COLOR_RED = NULL;
+static char *COLOR_DARK_RED = NULL;
+static char *COLOR_GREEN = NULL;
+static char *COLOR_DARK_GREEN = NULL;
+static char *COLOR_YELLOW = NULL;
+static char *COLOR_DARK_YELLOW = NULL;
+static char *COLOR_BLUE = NULL;
+static char *COLOR_DARK_BLUE = NULL;
+static char *COLOR_MAGENTA = NULL;
+static char *COLOR_DARK_MAGENTA = NULL;
+static char *COLOR_CYAN = NULL;
+static char *COLOR_DARK_CYAN = NULL;
+static char *COLOR_WHITE = NULL;
+static char *COLOR_DARK_WHITE = NULL;
 
 static inline void write_fully(int fd, const char *buffer, size_t length)
 {
@@ -49,6 +69,8 @@ static unsigned char should_print_message(const char *buffer, size_t length)
 {
     if (length < 3) return 0; // don't want blank lines
     
+    unsigned char should_print = 1;
+    
     size_t space_offsets[3];
     find_space_offsets(buffer, length, space_offsets);
     
@@ -64,37 +86,49 @@ static unsigned char should_print_message(const char *buffer, size_t length)
             if (processName[i] == '[')
                 processName[i] = '\0';
         
-        if (strcmp(processName, requiredProcessName) != 0){
-            free(processName);
-            return 0;
-        }
+        if (strcmp(processName, requiredProcessName) != 0)
+            should_print = 0;
+            
         free(processName);
+    }
+    
+    if (requiredRegex != NULL) {
+        char *message = malloc(length + 1);
+        memcpy(message, buffer, length + 1);
+        message[length + 1] = '\0';
+        
+        if (regexec(requiredRegex, message, 0, NULL, 0) == REG_NOMATCH)
+            should_print = 0;
     }
     
     // More filtering options can be added here and return 0 when they won't meed filter criteria
     
-    return 1;
+    return should_print;
 }
 
-#define write_const(fd, text) write_fully(fd, text, sizeof(text)-1)
+#define write_const(fd, text) write_fully(fd, text, strlen(text))
+#define stringify(x) #x
+#define xcode_color_with_rgb(type, r, g, b) "\e[" type stringify(r) "," stringify(g) "," stringify(b) ";"
 
-#define COLOR_RESET         "\e[m"
-#define COLOR_NORMAL        "\e[0m"
-#define COLOR_DARK          "\e[2m"
-#define COLOR_RED           "\e[0;31m"
-#define COLOR_DARK_RED      "\e[2;31m"
-#define COLOR_GREEN         "\e[0;32m"
-#define COLOR_DARK_GREEN    "\e[2;32m"
-#define COLOR_YELLOW        "\e[0;33m"
-#define COLOR_DARK_YELLOW   "\e[2;33m"
-#define COLOR_BLUE          "\e[0;34m"
-#define COLOR_DARK_BLUE     "\e[2;34m"
-#define COLOR_MAGENTA       "\e[0;35m"
-#define COLOR_DARK_MAGENTA  "\e[2;35m"
-#define COLOR_CYAN          "\e[0;36m"
-#define COLOR_DARK_CYAN     "\e[2;36m"
-#define COLOR_WHITE         "\e[0;37m"
-#define COLOR_DARK_WHITE    "\e[0;37m"
+static void set_colors(xcode_colors) {
+    COLOR_RESET         = (xcode_colors) ? "\e[;"                                       :   "\e[m";
+    COLOR_NORMAL        = (xcode_colors) ? xcode_color_with_rgb("fg", 0, 0, 0)          :   "\e[0m";
+    COLOR_DARK          = (xcode_colors) ? xcode_color_with_rgb("fg", 102, 102, 102)    :   "\e[2m";
+    COLOR_RED           = (xcode_colors) ? xcode_color_with_rgb("fg", 151, 4, 12)       :   "\e[0;31m";
+    COLOR_DARK_RED      = (xcode_colors) ? xcode_color_with_rgb("fg", 227, 10, 23)       :   "\e[2;31m";
+    COLOR_GREEN         = (xcode_colors) ? xcode_color_with_rgb("fg", 23, 164, 26)       :   "\e[0;32m";
+    COLOR_DARK_GREEN    = (xcode_colors) ? xcode_color_with_rgb("fg", 33, 215, 38)        :   "\e[2;32m";
+    COLOR_YELLOW        = (xcode_colors) ? xcode_color_with_rgb("fg", 153, 152, 29)      :   "\e[0;33m";
+    COLOR_DARK_YELLOW   = (xcode_colors) ? xcode_color_with_rgb("fg", 229, 228, 49)      :   "\e[2;33m";
+    COLOR_BLUE          = (xcode_colors) ? xcode_color_with_rgb("fg", 5, 22, 175)        :   "\e[0;34m";
+    COLOR_DARK_BLUE     = (xcode_colors) ? xcode_color_with_rgb("fg", 11, 36, 251)        :   "\e[2;34m";
+    COLOR_MAGENTA       = (xcode_colors) ? xcode_color_with_rgb("fg", 177, 25, 176)    :   "\e[0;35m";
+    COLOR_DARK_MAGENTA  = (xcode_colors) ? xcode_color_with_rgb("fg", 227, 25, 227)    :   "\e[2;35m";
+    COLOR_CYAN          = (xcode_colors) ? xcode_color_with_rgb("fg", 26, 166, 177)     :   "\e[0;36m";
+    COLOR_DARK_CYAN     = (xcode_colors) ? xcode_color_with_rgb("fg", 39, 229, 228)     :   "\e[2;36m";
+    COLOR_WHITE         = (xcode_colors) ? xcode_color_with_rgb("fg", 191, 191, 191)    :   "\e[0;37m";
+    COLOR_DARK_WHITE    = (xcode_colors) ? xcode_color_with_rgb("fg", 230, 229, 230)    :   "\e[0;37m";
+}
 
 static void write_colored(int fd, const char *buffer, size_t length)
 {
@@ -276,20 +310,27 @@ static void plain_separator(int fd)
 
 static void color_separator(int fd)
 {
-    write_const(fd, COLOR_DARK_WHITE "--" COLOR_RESET "\n");
+    size_t buffer_lentgh = sizeof(char) * (strlen(COLOR_DARK_WHITE) + strlen(COLOR_RESET) + 3);
+    char *buffer = malloc(buffer_lentgh);
+    sprintf(buffer, "%s--%s\n", COLOR_DARK_WHITE, COLOR_RESET);
+    
+    write_const(fd, buffer);
+    free(buffer);
 }
 
 int main (int argc, char * const argv[])
 {
     if ((argc == 2) && (strcmp(argv[1], "--help") == 0)) {
-        fprintf(stderr, "Usage: %s [options]\nOptions:\n -d\t\t\tInclude connect/disconnect messages in standard out\n -u <udid>\t\tShow only logs from a specific device\n -p <process name>\tShow only logs from a specific process\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
+        fprintf(stderr, "Usage: %s [options]\nOptions:\n -d\t\t\t\tInclude connect/disconnect messages in standard out\n -u <udid>\t\t\tShow only logs from a specific device\n -p <process name>\t\tShow only logs from a specific process\n -r <regular expression>\tFilter messages by regular expression.\n -x\t\t\t\tDisable tty coloring in Xcode (unless XcodeColors intalled).\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
         return 1;
     }
     int c;
     bool use_separators = false;
-    bool force_color = false;
+    bool force_color = isatty(1);
+    bool xcode_colors = ((getenv("XcodeColors")) ? strstr(getenv("XcodeColors"), "YES") != NULL : false);
+    bool in_xcode = xcode_colors;
 
-    while ((c = getopt(argc, argv, "dcsu:p:")) != -1)
+    while ((c = getopt(argc, argv, "dcxsu:p:r:")) != -1)
         switch (c)
     {
         case 'd':
@@ -297,6 +338,9 @@ int main (int argc, char * const argv[])
             break;
         case 'c':
             force_color = true;
+            break;
+        case 'x':
+            in_xcode = true;
             break;
         case 's':
             use_separators = true;
@@ -312,6 +356,13 @@ int main (int argc, char * const argv[])
 
             strcpy(requiredProcessName, optarg);
             break;
+        case 'r':
+            requiredRegex = malloc(sizeof(regex_t));
+            if (regcomp(requiredRegex, optarg, REG_EXTENDED | REG_NEWLINE | REG_ICASE)) {
+                fprintf(stderr, "Error: Could not compile regex %s.\n", optarg);
+                return 1;
+            }
+            break;
         case '?':
             if (optopt == 'u')
                 fprintf(stderr, "Option -%c requires an argument.\n", optopt);
@@ -323,7 +374,8 @@ int main (int argc, char * const argv[])
         default:
             abort();
     }
-    if (force_color || isatty(1)) {
+    if ((!in_xcode && force_color) || xcode_colors) {
+        set_colors(xcode_colors);
         printMessage = &write_colored;
         printSeparator = use_separators ? &color_separator : &no_separator;
     } else {
