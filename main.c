@@ -374,7 +374,6 @@ int main (int argc, char * const argv[])
         default:
             abort();
     }
-    
     if ((!in_xcode && force_color) || xcode_colors) {
         set_colors(xcode_colors);
         printMessage = &write_colored;
