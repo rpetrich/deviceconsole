@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <regex.h>
 #include <unistd.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include "MobileDevice.h"
@@ -13,6 +14,7 @@ static CFMutableDictionaryRef liveConnections;
 static int debug;
 static CFStringRef requiredDeviceId;
 static char *requiredProcessName;
+static regex_t *requiredRegex;
 static void (*printMessage)(int fd, const char *, size_t);
 static void (*printSeparator)(int fd);
 
@@ -49,6 +51,8 @@ static unsigned char should_print_message(const char *buffer, size_t length)
 {
     if (length < 3) return 0; // don't want blank lines
     
+    unsigned char should_print = 1;
+    
     size_t space_offsets[3];
     find_space_offsets(buffer, length, space_offsets);
     
@@ -64,16 +68,24 @@ static unsigned char should_print_message(const char *buffer, size_t length)
             if (processName[i] == '[')
                 processName[i] = '\0';
         
-        if (strcmp(processName, requiredProcessName) != 0){
-            free(processName);
-            return 0;
-        }
+        if (strcmp(processName, requiredProcessName) != 0)
+            should_print = 0;
+            
         free(processName);
+    }
+    
+    if (requiredRegex != NULL) {
+        char *message = malloc(length + 1);
+        memcpy(message, buffer, length + 1);
+        message[length + 1] = '\0';
+        
+        if (regexec(requiredRegex, message, 0, NULL, 0) == REG_NOMATCH)
+            should_print = 0;
     }
     
     // More filtering options can be added here and return 0 when they won't meed filter criteria
     
-    return 1;
+    return should_print;
 }
 
 #define write_const(fd, text) write_fully(fd, text, sizeof(text)-1)
@@ -282,14 +294,14 @@ static void color_separator(int fd)
 int main (int argc, char * const argv[])
 {
     if ((argc == 2) && (strcmp(argv[1], "--help") == 0)) {
-        fprintf(stderr, "Usage: %s [options]\nOptions:\n -d\t\t\tInclude connect/disconnect messages in standard out\n -u <udid>\t\tShow only logs from a specific device\n -p <process name>\tShow only logs from a specific process\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
+        fprintf(stderr, "Usage: %s [options]\nOptions:\n -d\t\t\tInclude connect/disconnect messages in standard out\n -u <udid>\t\tShow only logs from a specific device\n -p <process name>\tShow only logs from a specific process\n -r <regular expression>\tFilter messages by regular expression.\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
         return 1;
     }
     int c;
     bool use_separators = false;
     bool force_color = false;
 
-    while ((c = getopt(argc, argv, "dcsu:p:")) != -1)
+    while ((c = getopt(argc, argv, "dcsu:p:r:")) != -1)
         switch (c)
     {
         case 'd':
@@ -311,6 +323,13 @@ int main (int argc, char * const argv[])
             requiredProcessName[strlen(optarg)] = '\0';
 
             strcpy(requiredProcessName, optarg);
+            break;
+        case 'r':
+            requiredRegex = malloc(sizeof(regex_t));
+            if (regcomp(requiredRegex, optarg, REG_EXTENDED | REG_NEWLINE | REG_ICASE)) {
+                fprintf(stderr, "Error: Could not compile regex %s.\n", optarg);
+                return 1;
+            }
             break;
         case '?':
             if (optopt == 'u')
