@@ -13,7 +13,7 @@ typedef struct {
 static CFMutableDictionaryRef liveConnections;
 static int debug;
 static CFStringRef requiredDeviceId;
-static char *requiredProcessName;
+static char *requiredProcessNames;
 static regex_t *requiredRegex;
 static void (*printMessage)(int fd, const char *, size_t);
 static void (*printSeparator)(int fd);
@@ -75,7 +75,8 @@ static unsigned char should_print_message(const char *buffer, size_t length)
     find_space_offsets(buffer, length, space_offsets);
     
     // Check whether process name matches the one passed to -p option and filter if needed
-    if (requiredProcessName != NULL) {
+    if (requiredProcessNames != NULL) {
+        char *currentProcessName;
         int nameLength = space_offsets[1] - space_offsets[0]; //This size includes the NULL terminator.
         
         char *processName = malloc(nameLength);
@@ -86,8 +87,15 @@ static unsigned char should_print_message(const char *buffer, size_t length)
             if (processName[i] == '[')
                 processName[i] = '\0';
         
-        if (strcmp(processName, requiredProcessName) != 0)
-            should_print = 0;
+        currentProcessName = strtok(strdup(requiredProcessNames), ", ");
+        while (currentProcessName != NULL) {
+            should_print = (strcmp(processName, currentProcessName) == 0);
+            
+            if (should_print)
+                break;
+            
+            currentProcessName = strtok(NULL, ", ");
+        }
             
         free(processName);
     }
@@ -321,7 +329,7 @@ static void color_separator(int fd)
 int main (int argc, char * const argv[])
 {
     if ((argc == 2) && (strcmp(argv[1], "--help") == 0)) {
-        fprintf(stderr, "Usage: %s [options]\nOptions:\n -d\t\t\t\tInclude connect/disconnect messages in standard out\n -u <udid>\t\t\tShow only logs from a specific device\n -p <process name>\t\tShow only logs from a specific process\n -r <regular expression>\tFilter messages by regular expression.\n -x\t\t\t\tDisable tty coloring in Xcode (unless XcodeColors intalled).\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
+        fprintf(stderr, "Usage: %s [options]\nOptions:\n -d\t\t\t\tInclude connect/disconnect messages in standard out\n -u <udid>\t\t\tShow only logs from a specific device\n -p <\"process name, process name\">\t\tShow only logs from a specific process\n -r <regular expression>\tFilter messages by regular expression.\n -x\t\t\t\tDisable tty coloring in Xcode (unless XcodeColors intalled).\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
         return 1;
     }
     int c;
@@ -351,10 +359,10 @@ int main (int argc, char * const argv[])
             requiredDeviceId = CFStringCreateWithCString(kCFAllocatorDefault, optarg, kCFStringEncodingASCII);
             break;
         case 'p':
-            requiredProcessName = malloc(strlen(optarg) + 1);
-            requiredProcessName[strlen(optarg)] = '\0';
+            requiredProcessNames = malloc(strlen(optarg) + 1);
+            requiredProcessNames[strlen(optarg)] = '\0';
 
-            strcpy(requiredProcessName, optarg);
+            strcpy(requiredProcessNames, optarg);
             break;
         case 'r':
             requiredRegex = malloc(sizeof(regex_t));
