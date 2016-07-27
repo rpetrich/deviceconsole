@@ -63,7 +63,10 @@ static unsigned char should_print_message(const char *buffer, size_t length)
         memcpy(processName, buffer + space_offsets[0] + 1, nameLength - 1);
 
         for (int i = strlen(processName); i != 0; i--)
-            if (processName[i] == '[')
+            // the full process name looks like 'kernel(AppleBiometricSensor)[0]' in iOS 10
+            // or 'kernel[0]' in iOS below 10
+            // -> strip everything behind the first '(' or '['
+            if (processName[i] == '[' || processName[i] == '(')
                 processName[i] = '\0';
         
         if (strcmp(processName, requiredProcessName) != 0){
