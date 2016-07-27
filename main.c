@@ -157,6 +157,9 @@ static void write_colored(int fd, const char *buffer, size_t length)
             } else if (levelLength == 10 && memcmp(buffer + space_offsets[1], " <Notice>:", 10) == 0) {
                 normalColor = COLOR_GREEN;
                 darkColor = COLOR_DARK_GREEN;
+            } else if (levelLength == 8 && memcmp(buffer + space_offsets[1], " <Info>:", 8) == 0) {
+                normalColor = COLOR_BLUE;
+                darkColor = COLOR_DARK_BLUE;
             } else {
                 goto level_unformatted;
             }
