@@ -10,11 +10,19 @@ typedef struct {
     CFRunLoopSourceRef source;
 } DeviceConsoleConnection;
 
+typedef struct {
+    char *name;
+    char *pid;
+    char *extension;
+} ProcessParams, *ProcessParams_p;
+
 static CFMutableDictionaryRef liveConnections;
 static int debug;
 static CFStringRef requiredDeviceId;
 static char *requiredProcessNames;
-static regex_t *requiredRegex;
+static char *requiredExtensionNames;
+static bool use_regex = false;
+static regex_t requiredRegex;
 static void (*printMessage)(int fd, const char *, size_t);
 static void (*printSeparator)(int fd);
 
@@ -56,6 +64,9 @@ static int find_space_offsets(const char *buffer, size_t length, size_t *space_o
 {
     int o = 0;
     for (size_t i = 16; i < length; i++) {
+        if (buffer[i] == '\0')
+            break;
+        
         if (buffer[i] == ' ') {
             space_offsets_out[o++] = i;
             if (o == 3) {
@@ -65,52 +76,125 @@ static int find_space_offsets(const char *buffer, size_t length, size_t *space_o
     }
     return o;
 }
+
+
+/* ! Modifies buffer ! */
+static void parse_process_params(char *buffer, ProcessParams_p process_params_out) {
+    memset(process_params_out, 0, sizeof(ProcessParams));
+    
+    process_params_out->name = buffer;
+    
+    for (int i = strlen(buffer); i != 0; i--) {
+        if (buffer[i] == ']')
+            buffer[i] = '\0';
+        
+        if (buffer[i] == '[') {
+            process_params_out->pid = buffer + i + 1;
+            buffer[i] = '\0';
+        }
+        
+        if (buffer[i] == ')')
+            buffer[i] = '\0';
+        
+        if (buffer[i] == '(') {
+            process_params_out->extension = buffer + i + 1;
+            buffer[i] = '\0';
+        }
+    }
+}
+
 static unsigned char should_print_message(const char *buffer, size_t length)
 {
     if (length < 3) return 0; // don't want blank lines
     
+    static unsigned char last_should_print = 0;
     unsigned char should_print = 1;
     
     size_t space_offsets[3];
     find_space_offsets(buffer, length, space_offsets);
     
-    // Check whether process name matches the one passed to -p option and filter if needed
-    if (requiredProcessNames != NULL) {
-        char *currentProcessName;
+    
+    // Both process name/pid and extension name filters require process params parsing
+    if (requiredProcessNames != NULL || requiredExtensionNames != NULL) {
         int nameLength = space_offsets[1] - space_offsets[0]; //This size includes the NULL terminator.
         
-        char *processName = malloc(nameLength);
-        processName[nameLength - 1] = '\0';
-        memcpy(processName, buffer + space_offsets[0] + 1, nameLength - 1);
-
-        for (int i = strlen(processName); i != 0; i--)
-            if (processName[i] == '[')
-                processName[i] = '\0';
+        char *allProcessParams = malloc(nameLength);
+        allProcessParams[nameLength - 1] = '\0';
         
-        currentProcessName = strtok(strdup(requiredProcessNames), ", ");
-        while (currentProcessName != NULL) {
-            should_print = (strcmp(processName, currentProcessName) == 0);
+        memcpy(allProcessParams, buffer + space_offsets[0] + 1, nameLength - 1);
+        
+        ProcessParams processParams;
+        parse_process_params(allProcessParams, &processParams);
+        
+        // Check whether process name matches the list passed to -p option and filter if needed
+        if (requiredProcessNames != NULL) {
+            char *currentProcessName = strtok(strdup(requiredProcessNames), ", ");
+            while (currentProcessName != NULL) {
+                bool isPID = (processParams.pid != NULL);
+                for (int i=0; i < strlen(currentProcessName); i++) {
+                    if (isnumber(currentProcessName[i]) == 0) {
+                        isPID = false;
+                        break;
+                    }
+                }
+                
+                should_print = (strcmp((isPID) ? processParams.pid : processParams.name, currentProcessName) == 0);
+                
+                if (should_print)
+                    break;
+                
+                currentProcessName = strtok(NULL, ", ");
+            }
             
-            if (should_print)
-                break;
-            
-            currentProcessName = strtok(NULL, ", ");
+            if (!should_print) {
+                last_should_print = should_print;
+                return should_print;
+            }
         }
+        
+        
+        // Check whether extension name matches the list passed to -e option and filter if needed
+        if (requiredExtensionNames != NULL) {
+            if (processParams.extension == NULL) {
+                last_should_print = false;
+                return false;
+            }
             
-        free(processName);
+            
+            char *currentExtensionName = strtok(strdup(requiredExtensionNames), ", ");
+            while (currentExtensionName != NULL) {
+                should_print = (strcmp(processParams.extension, currentExtensionName) == 0);
+                
+                if (should_print)
+                    break;
+                
+                currentExtensionName = strtok(NULL, ", ");
+            }
+            
+            if (!should_print) {
+                last_should_print = should_print;
+                return should_print;
+            }
+        }
+        
+        free(allProcessParams);
     }
     
-    if (requiredRegex != NULL) {
-        char *message = malloc(length + 1);
-        memcpy(message, buffer, length + 1);
+    // Check whether buffer matches the regex passed to -r option and filter if needed
+    if (use_regex) {
+        char message[length + 1];
+        
+        memcpy(message, buffer, length);
         message[length + 1] = '\0';
         
-        if (regexec(requiredRegex, message, 0, NULL, 0) == REG_NOMATCH)
-            should_print = 0;
+        if (regexec(&requiredRegex, message, 0, NULL, 0) == REG_NOMATCH)
+            should_print = false;
     }
+
     
-    // More filtering options can be added here and return 0 when they won't meed filter criteria
+    // More filtering options can be added here and return 0 when they won't meet filter criteria
     
+    last_should_print = should_print;
     return should_print;
 }
 
@@ -223,8 +307,21 @@ static void SocketCallback(CFSocketRef s, CFSocketCallBackType type, CFDataRef a
         while ((buffer[extentLength] != '\0') && extentLength != length) {
             extentLength++;
         }
+
+        static unsigned char should_print_result = false;
+        bool should_filter = false;
         
-        if (should_print_message(buffer, extentLength)) {
+        if (    strnstr(buffer, "<Notice>:", 150)   || strnstr(buffer, "<Info>:", 150)
+            ||  strnstr(buffer, "<Error>:", 150)    || strnstr(buffer, "<Warning>:", 150)
+            ||  strnstr(buffer, "<Warning>:", 150)  || strnstr(buffer, "<Debug>:", 150))
+        {
+            should_filter = true;
+        }
+        
+        if (should_filter)
+            should_print_result = should_print_message(buffer, extentLength);
+        
+        if (should_print_result) {
             printMessage(1, buffer, extentLength);
             printSeparator(1);
         }
@@ -329,7 +426,7 @@ static void color_separator(int fd)
 int main (int argc, char * const argv[])
 {
     if ((argc == 2) && (strcmp(argv[1], "--help") == 0)) {
-        fprintf(stderr, "Usage: %s [options]\nOptions:\n -d\t\t\t\tInclude connect/disconnect messages in standard out\n -u <udid>\t\t\tShow only logs from a specific device\n -p <\"process name, process name\">\t\tShow only logs from a specific process\n -r <regular expression>\tFilter messages by regular expression.\n -x\t\t\t\tDisable tty coloring in Xcode (unless XcodeColors intalled).\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
+        fprintf(stderr, "Usage: %s [options]\nOptions:\n -d\t\t\t\tInclude connect/disconnect messages in standard out\n -u <udid>\t\t\tShow only logs from a specific device\n -p <\"process name, pid\">\tShow only logs from a specific process name or pid\n -e <\"kext name, dylib name\">\tShow only logs from a specific process extension (kext/dylib) - *iOS 10 only*\n -r <regular expression>\tFilter messages by regular expression.\n -x\t\t\t\tDisable tty coloring in Xcode (unless XcodeColors intalled).\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
         return 1;
     }
     int c;
@@ -338,7 +435,7 @@ int main (int argc, char * const argv[])
     bool xcode_colors = ((getenv("XcodeColors")) ? strstr(getenv("XcodeColors"), "YES") != NULL : false);
     bool in_xcode = xcode_colors;
 
-    while ((c = getopt(argc, argv, "dcxsu:p:r:")) != -1)
+    while ((c = getopt(argc, argv, "dcxsu:p:r:e:")) != -1)
         switch (c)
     {
         case 'd':
@@ -364,9 +461,15 @@ int main (int argc, char * const argv[])
 
             strcpy(requiredProcessNames, optarg);
             break;
+        case 'e':
+            requiredExtensionNames = malloc(strlen(optarg) + 1);
+            requiredExtensionNames[strlen(optarg)] = '\0';
+            
+            strcpy(requiredExtensionNames, optarg);
+            break;
         case 'r':
-            requiredRegex = malloc(sizeof(regex_t));
-            if (regcomp(requiredRegex, optarg, REG_EXTENDED | REG_NEWLINE | REG_ICASE)) {
+            use_regex = true;
+            if (regcomp(&requiredRegex, optarg, REG_EXTENDED | REG_NEWLINE | REG_ICASE)) {
                 fprintf(stderr, "Error: Could not compile regex %s.\n", optarg);
                 return 1;
             }
@@ -394,5 +497,15 @@ int main (int argc, char * const argv[])
     am_device_notification *notification;
     AMDeviceNotificationSubscribe(DeviceNotificationCallback, 0, 0, NULL, &notification);
     CFRunLoopRun();
+    
+    if (requiredProcessNames != NULL)
+        free(requiredProcessNames);
+    
+    if (requiredExtensionNames != NULL)
+        free(requiredExtensionNames);
+    
+    if (use_regex)
+        regfree(&requiredRegex);
+    
     return 0;
 }
