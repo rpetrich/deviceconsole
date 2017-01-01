@@ -1,48 +1,10 @@
 #include <stdio.h>
 #include <regex.h>
 #include <unistd.h>
-#include <CoreFoundation/CoreFoundation.h>
-#include "MobileDevice.h"
+#include "main.h"
 
-typedef struct {
-    service_conn_t connection;
-    CFSocketRef socket;
-    CFRunLoopSourceRef source;
-} DeviceConsoleConnection;
-
-typedef struct {
-    char *name;
-    char *pid;
-    char *extension;
-} ProcessParams, *ProcessParams_p;
-
-static CFMutableDictionaryRef liveConnections;
-static int debug;
-static CFStringRef requiredDeviceId;
-static char *requiredProcessNames;
-static char *requiredExtensionNames;
-static bool use_regex = false;
-static regex_t requiredRegex;
-static void (*printMessage)(int fd, const char *, size_t);
-static void (*printSeparator)(int fd);
-
-static char *COLOR_RESET = NULL;
-static char *COLOR_NORMAL = NULL;
-static char *COLOR_DARK = NULL;
-static char *COLOR_RED = NULL;
-static char *COLOR_DARK_RED = NULL;
-static char *COLOR_GREEN = NULL;
-static char *COLOR_DARK_GREEN = NULL;
-static char *COLOR_YELLOW = NULL;
-static char *COLOR_DARK_YELLOW = NULL;
-static char *COLOR_BLUE = NULL;
-static char *COLOR_DARK_BLUE = NULL;
-static char *COLOR_MAGENTA = NULL;
-static char *COLOR_DARK_MAGENTA = NULL;
-static char *COLOR_CYAN = NULL;
-static char *COLOR_DARK_CYAN = NULL;
-static char *COLOR_WHITE = NULL;
-static char *COLOR_DARK_WHITE = NULL;
+static Config_p config = NULL;
+static Colors_p colors = NULL;
 
 static inline void write_fully(int fd, const char *buffer, size_t length)
 {
@@ -114,7 +76,7 @@ static unsigned char should_print_message(const char *buffer, size_t length)
     
     
     // Both process name/pid and extension name filters require process params parsing
-    if (requiredProcessNames != NULL || requiredExtensionNames != NULL) {
+    if (config->requiredProcessNames != NULL || config->requiredExtensionNames != NULL) {
         int nameLength = space_offsets[1] - space_offsets[0]; //This size includes the NULL terminator.
         
         char *allProcessParams = malloc(nameLength);
@@ -126,8 +88,8 @@ static unsigned char should_print_message(const char *buffer, size_t length)
         parse_process_params(allProcessParams, &processParams);
         
         // Check whether process name matches the list passed to -p option and filter if needed
-        if (requiredProcessNames != NULL) {
-            char *currentProcessName = strtok(strdup(requiredProcessNames), ", ");
+        if (config->requiredProcessNames != NULL) {
+            char *currentProcessName = strtok(strdup(config->requiredProcessNames), ", ");
             while (currentProcessName != NULL) {
                 bool isPID = (processParams.pid != NULL);
                 for (int i=0; i < strlen(currentProcessName); i++) {
@@ -151,11 +113,11 @@ static unsigned char should_print_message(const char *buffer, size_t length)
         
         
         // Check whether extension name matches the list passed to -e option and filter if needed
-        if (requiredExtensionNames != NULL) {
+        if (config->requiredExtensionNames != NULL) {
             if (processParams.extension == NULL)
                 return false;
             
-            char *currentExtensionName = strtok(strdup(requiredExtensionNames), ", ");
+            char *currentExtensionName = strtok(strdup(config->requiredExtensionNames), ", ");
             while (currentExtensionName != NULL) {
                 should_print = (strcmp(processParams.extension, currentExtensionName) == 0);
                 
@@ -173,13 +135,13 @@ static unsigned char should_print_message(const char *buffer, size_t length)
     }
     
     // Check whether buffer matches the regex passed to -r option and filter if needed
-    if (use_regex) {
+    if (config->use_regex) {
         char message[length + 1];
         
         memcpy(message, buffer, length);
         message[length + 1] = '\0';
         
-        if (regexec(&requiredRegex, message, 0, NULL, 0) == REG_NOMATCH)
+        if (regexec(&config->requiredRegex, message, 0, NULL, 0) == REG_NOMATCH)
             should_print = false;
     }
 
@@ -193,24 +155,24 @@ static unsigned char should_print_message(const char *buffer, size_t length)
 #define stringify(x) #x
 #define xcode_color_with_rgb(type, r, g, b) "\e[" type stringify(r) "," stringify(g) "," stringify(b) ";"
 
-static void set_colors(xcode_colors) {
-    COLOR_RESET         = (xcode_colors) ? "\e[;"                                       :   "\e[m";
-    COLOR_NORMAL        = (xcode_colors) ? xcode_color_with_rgb("fg", 0, 0, 0)          :   "\e[0m";
-    COLOR_DARK          = (xcode_colors) ? xcode_color_with_rgb("fg", 102, 102, 102)    :   "\e[2m";
-    COLOR_RED           = (xcode_colors) ? xcode_color_with_rgb("fg", 151, 4, 12)       :   "\e[0;31m";
-    COLOR_DARK_RED      = (xcode_colors) ? xcode_color_with_rgb("fg", 227, 10, 23)       :   "\e[2;31m";
-    COLOR_GREEN         = (xcode_colors) ? xcode_color_with_rgb("fg", 23, 164, 26)       :   "\e[0;32m";
-    COLOR_DARK_GREEN    = (xcode_colors) ? xcode_color_with_rgb("fg", 33, 215, 38)        :   "\e[2;32m";
-    COLOR_YELLOW        = (xcode_colors) ? xcode_color_with_rgb("fg", 153, 152, 29)      :   "\e[0;33m";
-    COLOR_DARK_YELLOW   = (xcode_colors) ? xcode_color_with_rgb("fg", 229, 228, 49)      :   "\e[2;33m";
-    COLOR_BLUE          = (xcode_colors) ? xcode_color_with_rgb("fg", 5, 22, 175)        :   "\e[0;34m";
-    COLOR_DARK_BLUE     = (xcode_colors) ? xcode_color_with_rgb("fg", 11, 36, 251)        :   "\e[2;34m";
-    COLOR_MAGENTA       = (xcode_colors) ? xcode_color_with_rgb("fg", 177, 25, 176)    :   "\e[0;35m";
-    COLOR_DARK_MAGENTA  = (xcode_colors) ? xcode_color_with_rgb("fg", 227, 25, 227)    :   "\e[2;35m";
-    COLOR_CYAN          = (xcode_colors) ? xcode_color_with_rgb("fg", 26, 166, 177)     :   "\e[0;36m";
-    COLOR_DARK_CYAN     = (xcode_colors) ? xcode_color_with_rgb("fg", 39, 229, 228)     :   "\e[2;36m";
-    COLOR_WHITE         = (xcode_colors) ? xcode_color_with_rgb("fg", 191, 191, 191)    :   "\e[0;37m";
-    COLOR_DARK_WHITE    = (xcode_colors) ? xcode_color_with_rgb("fg", 230, 229, 230)    :   "\e[0;37m";
+static void set_colors(bool xcode_colors) {
+    colors->reset         = (xcode_colors) ? "\e[;"                                       :   "\e[m";
+    colors->normal        = (xcode_colors) ? xcode_color_with_rgb("fg", 0, 0, 0)          :   "\e[0m";
+    colors->dark          = (xcode_colors) ? xcode_color_with_rgb("fg", 102, 102, 102)    :   "\e[2m";
+    colors->red           = (xcode_colors) ? xcode_color_with_rgb("fg", 151, 4, 12)       :   "\e[0;31m";
+    colors->dark_red      = (xcode_colors) ? xcode_color_with_rgb("fg", 227, 10, 23)       :   "\e[2;31m";
+    colors->green         = (xcode_colors) ? xcode_color_with_rgb("fg", 23, 164, 26)       :   "\e[0;32m";
+    colors->dark_green    = (xcode_colors) ? xcode_color_with_rgb("fg", 33, 215, 38)        :   "\e[2;32m";
+    colors->yellow        = (xcode_colors) ? xcode_color_with_rgb("fg", 153, 152, 29)      :   "\e[0;33m";
+    colors->dark_yellow   = (xcode_colors) ? xcode_color_with_rgb("fg", 229, 228, 49)      :   "\e[2;33m";
+    colors->blue          = (xcode_colors) ? xcode_color_with_rgb("fg", 5, 22, 175)        :   "\e[0;34m";
+    colors->dark_blue     = (xcode_colors) ? xcode_color_with_rgb("fg", 11, 36, 251)        :   "\e[2;34m";
+    colors->magenta       = (xcode_colors) ? xcode_color_with_rgb("fg", 177, 25, 176)    :   "\e[0;35m";
+    colors->dark_magenta  = (xcode_colors) ? xcode_color_with_rgb("fg", 227, 25, 227)    :   "\e[2;35m";
+    colors->cyan          = (xcode_colors) ? xcode_color_with_rgb("fg", 26, 166, 177)     :   "\e[0;36m";
+    colors->dark_cyan     = (xcode_colors) ? xcode_color_with_rgb("fg", 39, 229, 228)     :   "\e[2;36m";
+    colors->white         = (xcode_colors) ? xcode_color_with_rgb("fg", 191, 191, 191)    :   "\e[0;37m";
+    colors->dark_white    = (xcode_colors) ? xcode_color_with_rgb("fg", 230, 229, 230)    :   "\e[0;37m";
 }
 
 static void write_colored(int fd, const char *buffer, size_t length)
@@ -225,7 +187,7 @@ static void write_colored(int fd, const char *buffer, size_t length)
     if (o == 3) {
         
         // Log date and device name
-        write_const(fd, COLOR_DARK_WHITE);
+        write_const(fd, colors->dark_white);
         write_fully(fd, buffer, space_offsets[0]);
         // Log process name, extension name and pid
         int pos = 0;
@@ -240,7 +202,7 @@ static void write_colored(int fd, const char *buffer, size_t length)
                 break;
             }
         }
-        write_const(fd, COLOR_CYAN);
+        write_const(fd, colors->cyan);
         if (pos) {
             // Process name
             write_fully(fd, buffer + space_offsets[0], pos - space_offsets[0]);
@@ -258,19 +220,19 @@ static void write_colored(int fd, const char *buffer, size_t length)
                 
                 if (new_pos) {
                     // Process extension name
-                    write_const(fd, COLOR_DARK_CYAN);
+                    write_const(fd, colors->dark_cyan);
                     write_fully(fd, buffer + pos, 1);
-                    write_const(fd, COLOR_CYAN);
+                    write_const(fd, colors->cyan);
                     write_fully(fd, buffer + pos + 1, new_pos - pos - 2);
-                    write_const(fd, COLOR_DARK_CYAN);
+                    write_const(fd, colors->dark_cyan);
                     write_fully(fd, buffer + new_pos - 1, 1);
                     
                     // PID
-                    write_const(fd, COLOR_DARK_CYAN);
+                    write_const(fd, colors->dark_cyan);
                     write_fully(fd, buffer + new_pos, 1);
-                    write_const(fd, COLOR_CYAN);
+                    write_const(fd, colors->cyan);
                     write_fully(fd, buffer + new_pos + 1, space_offsets[1] - new_pos - 2);
-                    write_const(fd, COLOR_DARK_CYAN);
+                    write_const(fd, colors->dark_cyan);
                     write_fully(fd, buffer + space_offsets[1] - 1, 1);
                 } else {
                     write_fully(fd, buffer + pos, space_offsets[1] - pos);
@@ -278,11 +240,11 @@ static void write_colored(int fd, const char *buffer, size_t length)
                 
             } else {
                 // PID
-                write_const(fd, COLOR_DARK_CYAN);
+                write_const(fd, colors->dark_cyan);
                 write_fully(fd, buffer + pos, 1);
-                write_const(fd, COLOR_CYAN);
+                write_const(fd, colors->cyan);
                 write_fully(fd, buffer + pos + 1, space_offsets[1] - pos - 2);
-                write_const(fd, COLOR_DARK_CYAN);
+                write_const(fd, colors->dark_cyan);
                 write_fully(fd, buffer + space_offsets[1] - 1, 1);
             }
         } else {
@@ -294,17 +256,17 @@ static void write_colored(int fd, const char *buffer, size_t length)
             const char *normalColor;
             const char *darkColor;
             if (levelLength == 9 && memcmp(buffer + space_offsets[1], " <Debug>:", 9) == 0){
-                normalColor = COLOR_MAGENTA;
-                darkColor = COLOR_DARK_MAGENTA;
+                normalColor = colors->magenta;
+                darkColor = colors->dark_magenta;
             } else if (levelLength == 11 && memcmp(buffer + space_offsets[1], " <Warning>:", 11) == 0){
-                normalColor = COLOR_YELLOW;
-                darkColor = COLOR_DARK_YELLOW;
+                normalColor = colors->yellow;
+                darkColor = colors->dark_yellow;
             } else if (levelLength == 9 && memcmp(buffer + space_offsets[1], " <Error>:", 9) == 0){
-                normalColor = COLOR_RED;
-                darkColor = COLOR_DARK_RED;
+                normalColor = colors->red;
+                darkColor = colors->dark_red;
             } else if (levelLength == 10 && memcmp(buffer + space_offsets[1], " <Notice>:", 10) == 0) {
-                normalColor = COLOR_GREEN;
-                darkColor = COLOR_DARK_GREEN;
+                normalColor = colors->green;
+                darkColor = colors->dark_green;
             } else {
                 goto level_unformatted;
             }
@@ -314,14 +276,14 @@ static void write_colored(int fd, const char *buffer, size_t length)
             write_fully(fd, buffer + space_offsets[1] + 2, levelLength - 4);
             write_string(fd, darkColor);
             write_fully(fd, buffer + space_offsets[1] + levelLength - 2, 1);
-            write_const(fd, COLOR_DARK_WHITE);
+            write_const(fd, colors->dark_white);
             write_fully(fd, buffer + space_offsets[1] + levelLength - 1, 1);
         } else {
         level_unformatted:
-            write_const(fd, COLOR_RESET);
+            write_const(fd, colors->reset);
             write_fully(fd, buffer + space_offsets[1], levelLength);
         }
-        write_const(fd, COLOR_RESET);
+        write_const(fd, colors->reset);
         write_fully(fd, buffer + space_offsets[2], length - space_offsets[2]);
     } else {
         write_fully(fd, buffer, length);
@@ -361,11 +323,11 @@ static void SocketCallback(CFSocketRef s, CFSocketCallBackType type, CFDataRef a
             if (should_filter) {
                 static bool is_first_message = true;
                 if (!is_first_message)
-                    printSeparator(1);
+                    config->printSeparator(1);
                 else
                     is_first_message = false;
                 
-                printMessage(1, buffer, extentLength);
+                config->printMessage(1, buffer, extentLength);
             }
             else
                 write_fully(1, buffer, extentLength);
@@ -381,16 +343,16 @@ static void DeviceNotificationCallback(am_device_notification_callback_info *inf
     struct am_device *device = info->dev;
     switch (info->msg) {
         case ADNCI_MSG_CONNECTED: {
-            if (debug) {
+            if (config->debug) {
                 CFStringRef deviceId = AMDeviceCopyDeviceIdentifier(device);
                 CFStringRef str = CFStringCreateWithFormat(kCFAllocatorDefault, NULL, CFSTR("deviceconsole connected: %@"), deviceId);
                 CFRelease(deviceId);
                 CFShow(str);
                 CFRelease(str);
             }
-            if (requiredDeviceId) {
+            if (config->requiredDeviceId) {
                 CFStringRef deviceId = AMDeviceCopyDeviceIdentifier(device);
-                Boolean isRequiredDevice = CFEqual(deviceId, requiredDeviceId);
+                Boolean isRequiredDevice = CFEqual(deviceId, config->requiredDeviceId);
                 CFRelease(deviceId);
                 if (!isRequiredDevice)
                     break;
@@ -410,7 +372,7 @@ static void DeviceNotificationCallback(am_device_notification_callback_info *inf
                                     data->connection = connection;
                                     data->socket = socket;
                                     data->source = source;
-                                    CFDictionarySetValue(liveConnections, device, data);
+                                    CFDictionarySetValue(config->liveConnections, device, data);
                                     return;
                                 }
                                 CFRelease(source);
@@ -424,16 +386,16 @@ static void DeviceNotificationCallback(am_device_notification_callback_info *inf
             break;
         }
         case ADNCI_MSG_DISCONNECTED: {
-            if (debug) {
+            if (config->debug) {
                 CFStringRef deviceId = AMDeviceCopyDeviceIdentifier(device);
                 CFStringRef str = CFStringCreateWithFormat(kCFAllocatorDefault, NULL, CFSTR("deviceconsole disconnected: %@"), deviceId);
                 CFRelease(deviceId);
                 CFShow(str);
                 CFRelease(str);
             }
-            DeviceConsoleConnection *data = (DeviceConsoleConnection *)CFDictionaryGetValue(liveConnections, device);
+            DeviceConsoleConnection *data = (DeviceConsoleConnection *)CFDictionaryGetValue(config->liveConnections, device);
             if (data) {
-                CFDictionaryRemoveValue(liveConnections, device);
+                CFDictionaryRemoveValue(config->liveConnections, device);
                 AMDeviceRelease(device);
                 CFRunLoopRemoveSource(CFRunLoopGetMain(), data->source, kCFRunLoopCommonModes);
                 CFRelease(data->source);
@@ -460,20 +422,48 @@ static void plain_separator(int fd)
 
 static void color_separator(int fd)
 {
-    size_t buffer_lentgh = sizeof(char) * (strlen(COLOR_DARK_WHITE) + strlen(COLOR_RESET) + 3);
+    size_t buffer_lentgh = sizeof(char) * (strlen(colors->dark_white) + strlen(colors->reset) + 3);
     char *buffer = malloc(buffer_lentgh);
-    sprintf(buffer, "%s--%s\n", COLOR_DARK_WHITE, COLOR_RESET);
+    sprintf(buffer, "%s--%s\n", colors->dark_white, colors->reset);
     
     write_const(fd, buffer);
     free(buffer);
 }
 
+static void print_help(char *process_name) {
+    fprintf(stderr,
+            "Usage: %s [options]\n"
+            "Options:\n"
+            " -d\t\t\t\tInclude connect/disconnect messages in standard out"
+            "\n"
+            " -u <udid>\t\t\tShow only logs from a specific device"
+            "\n"
+            "-p <\"process name, pid\">\tShow only logs from a specific process name or pid"
+            "\n"
+            "-e <\"kext name, dylib name\">\tShow only logs from a specific process extension (kext/dylib) - *iOS 10 only*"
+            "\n"
+            "-r <regular expression>\tFilter messages by regular expression."
+            "\n"
+            "-x\t\t\t\tDisable tty coloring in Xcode (unless XcodeColors intalled)."
+            "\n"
+            "\n"
+            "Control-C to disconnect"
+            "\n"
+            "Mail bug reports and suggestions to <ryan.petrich@medialets.com> (or <dany931@gmail.com>)"
+            "\n"
+            , process_name);
+}
+
 int main (int argc, char * const argv[])
 {
-    if ((argc == 2) && (strcmp(argv[1], "--help") == 0)) {
-        fprintf(stderr, "Usage: %s [options]\nOptions:\n -d\t\t\t\tInclude connect/disconnect messages in standard out\n -u <udid>\t\t\tShow only logs from a specific device\n -p <\"process name, pid\">\tShow only logs from a specific process name or pid\n -e <\"kext name, dylib name\">\tShow only logs from a specific process extension (kext/dylib) - *iOS 10 only*\n -r <regular expression>\tFilter messages by regular expression.\n -x\t\t\t\tDisable tty coloring in Xcode (unless XcodeColors intalled).\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
+    if ((argc == 2) && ((strcmp(argv[1], "--help") == 0) || (strcmp(argv[1], "-h") == 0))) {
+        print_help(argv[0]);
         return 1;
     }
+    
+    config = malloc(sizeof(Config));
+    memset(config, 0, sizeof(Config));
+    
     int c;
     bool use_separators = false;
     bool force_color = isatty(1);
@@ -484,7 +474,7 @@ int main (int argc, char * const argv[])
         switch (c)
     {
         case 'd':
-            debug = 1;
+            config->debug = 1;
             break;
         case 'c':
             force_color = true;
@@ -496,25 +486,25 @@ int main (int argc, char * const argv[])
             use_separators = true;
             break;
         case 'u':
-            if (requiredDeviceId)
-                CFRelease(requiredDeviceId);
-            requiredDeviceId = CFStringCreateWithCString(kCFAllocatorDefault, optarg, kCFStringEncodingASCII);
+            if (config->requiredDeviceId)
+                CFRelease(config->requiredDeviceId);
+            config->requiredDeviceId = CFStringCreateWithCString(kCFAllocatorDefault, optarg, kCFStringEncodingASCII);
             break;
         case 'p':
-            requiredProcessNames = malloc(strlen(optarg) + 1);
-            requiredProcessNames[strlen(optarg)] = '\0';
+            config->requiredProcessNames = malloc(strlen(optarg) + 1);
+            config->requiredProcessNames[strlen(optarg)] = '\0';
 
-            strcpy(requiredProcessNames, optarg);
+            strcpy(config->requiredProcessNames, optarg);
             break;
         case 'e':
-            requiredExtensionNames = malloc(strlen(optarg) + 1);
-            requiredExtensionNames[strlen(optarg)] = '\0';
+            config->requiredExtensionNames = malloc(strlen(optarg) + 1);
+            config->requiredExtensionNames[strlen(optarg)] = '\0';
             
-            strcpy(requiredExtensionNames, optarg);
+            strcpy(config->requiredExtensionNames, optarg);
             break;
         case 'r':
-            use_regex = true;
-            if (regcomp(&requiredRegex, optarg, REG_EXTENDED | REG_NEWLINE | REG_ICASE)) {
+            config->use_regex = true;
+            if (regcomp(&config->requiredRegex, optarg, REG_EXTENDED | REG_NEWLINE | REG_ICASE)) {
                 fprintf(stderr, "Error: Could not compile regex %s.\n", optarg);
                 return 1;
             }
@@ -531,26 +521,34 @@ int main (int argc, char * const argv[])
             abort();
     }
     if ((!in_xcode && force_color) || xcode_colors) {
+        colors = malloc(sizeof(Colors));
         set_colors(xcode_colors);
-        printMessage = &write_colored;
-        printSeparator = use_separators ? &color_separator : &no_separator;
+        
+        config->printMessage = &write_colored;
+        config->printSeparator = use_separators ? &color_separator : &no_separator;
     } else {
-        printMessage = &write_fully;
-        printSeparator = use_separators ? &plain_separator : &no_separator;
+        config->printMessage = &write_fully;
+        config->printSeparator = use_separators ? &plain_separator : &no_separator;
     }
-    liveConnections = CFDictionaryCreateMutable(kCFAllocatorDefault, 0, NULL, NULL);
+    config->liveConnections = CFDictionaryCreateMutable(kCFAllocatorDefault, 0, NULL, NULL);
     am_device_notification *notification;
     AMDeviceNotificationSubscribe(DeviceNotificationCallback, 0, 0, NULL, &notification);
     CFRunLoopRun();
     
-    if (requiredProcessNames != NULL)
-        free(requiredProcessNames);
+    if (config->requiredProcessNames != NULL)
+        free(config->requiredProcessNames);
     
-    if (requiredExtensionNames != NULL)
-        free(requiredExtensionNames);
+    if (config->requiredExtensionNames != NULL)
+        free(config->requiredExtensionNames);
     
-    if (use_regex)
-        regfree(&requiredRegex);
+    if (config->use_regex)
+        regfree(&config->requiredRegex);
+    
+    if (config != NULL)
+        free(config);
+    
+    if (colors != NULL)
+        free(colors);
     
     return 0;
 }

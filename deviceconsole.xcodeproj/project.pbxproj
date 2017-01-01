@@ -26,6 +26,7 @@
 
 /* Begin PBXFileReference section */
 		08FB7796FE84155DC02AAC07 /* main.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = main.c; sourceTree = "<group>"; };
+		8B6CE20D1E19B11F003E38F4 /* main.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = main.h; sourceTree = "<group>"; };
 		8DD76FB20486AB0100D96B5E /* deviceconsole */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = deviceconsole; sourceTree = BUILT_PRODUCTS_DIR; };
 		945855DB140EB622009DFEA5 /* MobileDevice.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MobileDevice.h; sourceTree = "<group>"; };
 		945856A9140EC3BA009DFEA5 /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
@@ -61,6 +62,7 @@
 			children = (
 				945855DB140EB622009DFEA5 /* MobileDevice.h */,
 				08FB7796FE84155DC02AAC07 /* main.c */,
+				8B6CE20D1E19B11F003E38F4 /* main.h */,
 			);
 			name = Source;
 			sourceTree = "<group>";
@@ -99,6 +101,8 @@
 /* Begin PBXProject section */
 		08FB7793FE84155DC02AAC07 /* Project object */ = {
 			isa = PBXProject;
+			attributes = {
+			};
 			buildConfigurationList = 1DEB928908733DD80010E9CD /* Build configuration list for PBXProject "deviceconsole" */;
 			compatibilityVersion = "Xcode 3.1";
 			developmentRegion = English;
