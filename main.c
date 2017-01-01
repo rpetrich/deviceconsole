@@ -227,19 +227,64 @@ static void write_colored(int fd, const char *buffer, size_t length)
         // Log date and device name
         write_const(fd, COLOR_DARK_WHITE);
         write_fully(fd, buffer, space_offsets[0]);
-        // Log process name
+        // Log process name, extension name and pid
         int pos = 0;
-        for (int i = space_offsets[0]; i < space_offsets[0]; i++) {
+        for (int i = space_offsets[0]; i < space_offsets[1]; i++) {
+            if (buffer[i] == '(') {
+                pos = i;
+                break;
+            }
+            
             if (buffer[i] == '[') {
                 pos = i;
                 break;
             }
         }
         write_const(fd, COLOR_CYAN);
-        if (pos && buffer[space_offsets[1]-1] == ']') {
+        if (pos) {
+            // Process name
             write_fully(fd, buffer + space_offsets[0], pos - space_offsets[0]);
-            write_const(fd, COLOR_DARK_CYAN);
-            write_fully(fd, buffer + pos, space_offsets[1] - pos);
+            
+            if (buffer[pos] == '(') {
+                // Find '[' too
+                
+                int new_pos = 0;
+                for (int i = space_offsets[0]; i < space_offsets[1]; i++) {
+                    if (buffer[i] == '[') {
+                        new_pos = i;
+                        break;
+                    }
+                }
+                
+                if (new_pos) {
+                    // Process extension name
+                    write_const(fd, COLOR_DARK_CYAN);
+                    write_fully(fd, buffer + pos, 1);
+                    write_const(fd, COLOR_CYAN);
+                    write_fully(fd, buffer + pos + 1, new_pos - pos - 2);
+                    write_const(fd, COLOR_DARK_CYAN);
+                    write_fully(fd, buffer + new_pos - 1, 1);
+                    
+                    // PID
+                    write_const(fd, COLOR_DARK_CYAN);
+                    write_fully(fd, buffer + new_pos, 1);
+                    write_const(fd, COLOR_CYAN);
+                    write_fully(fd, buffer + new_pos + 1, space_offsets[1] - new_pos - 2);
+                    write_const(fd, COLOR_DARK_CYAN);
+                    write_fully(fd, buffer + space_offsets[1] - 1, 1);
+                } else {
+                    write_fully(fd, buffer + pos, space_offsets[1] - pos);
+                }
+                
+            } else {
+                // PID
+                write_const(fd, COLOR_DARK_CYAN);
+                write_fully(fd, buffer + pos, 1);
+                write_const(fd, COLOR_CYAN);
+                write_fully(fd, buffer + pos + 1, space_offsets[1] - pos - 2);
+                write_const(fd, COLOR_DARK_CYAN);
+                write_fully(fd, buffer + space_offsets[1] - 1, 1);
+            }
         } else {
             write_fully(fd, buffer + space_offsets[0], space_offsets[1] - space_offsets[0]);
         }
