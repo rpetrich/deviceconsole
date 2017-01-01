@@ -358,7 +358,11 @@ static void SocketCallback(CFSocketRef s, CFSocketCallBackType type, CFDataRef a
             should_print_result = should_print_message(buffer, extentLength);
         
         if (should_print_result) {
-            printMessage(1, buffer, extentLength);
+            if (should_filter)
+                printMessage(1, buffer, extentLength);
+            else
+                write_fully(1, buffer, extentLength);
+            
             printSeparator(1);
         }
         
