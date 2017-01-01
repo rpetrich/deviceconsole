@@ -107,7 +107,6 @@ static unsigned char should_print_message(const char *buffer, size_t length)
 {
     if (length < 3) return 0; // don't want blank lines
     
-    static unsigned char last_should_print = 0;
     unsigned char should_print = 1;
     
     size_t space_offsets[3];
@@ -146,20 +145,15 @@ static unsigned char should_print_message(const char *buffer, size_t length)
                 currentProcessName = strtok(NULL, ", ");
             }
             
-            if (!should_print) {
-                last_should_print = should_print;
+            if (!should_print)
                 return should_print;
-            }
         }
         
         
         // Check whether extension name matches the list passed to -e option and filter if needed
         if (requiredExtensionNames != NULL) {
-            if (processParams.extension == NULL) {
-                last_should_print = false;
+            if (processParams.extension == NULL)
                 return false;
-            }
-            
             
             char *currentExtensionName = strtok(strdup(requiredExtensionNames), ", ");
             while (currentExtensionName != NULL) {
@@ -171,10 +165,8 @@ static unsigned char should_print_message(const char *buffer, size_t length)
                 currentExtensionName = strtok(NULL, ", ");
             }
             
-            if (!should_print) {
-                last_should_print = should_print;
+            if (!should_print)
                 return should_print;
-            }
         }
         
         free(allProcessParams);
@@ -194,7 +186,6 @@ static unsigned char should_print_message(const char *buffer, size_t length)
     
     // More filtering options can be added here and return 0 when they won't meet filter criteria
     
-    last_should_print = should_print;
     return should_print;
 }
 
