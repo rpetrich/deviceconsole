@@ -75,6 +75,22 @@ static unsigned char should_print_message(const char *buffer, size_t length)
     
     return 1;
 }
+static unsigned char is_continued_message(const char *buffer, size_t length)
+{
+    if (length > 0) {
+        switch (buffer[0]) {
+            case ' ':
+            case '\t':
+                return 1;
+        }
+
+        size_t space_offsets[3];
+        if (find_space_offsets(buffer, length, space_offsets) < 3) {
+            return 1;
+        }
+    }
+    return 0;
+}
 
 #define write_const(fd, text) write_fully(fd, text, sizeof(text)-1)
 
@@ -182,9 +198,16 @@ static void SocketCallback(CFSocketRef s, CFSocketCallBackType type, CFDataRef a
             extentLength++;
         }
         
-        if (should_print_message(buffer, extentLength)) {
+        static unsigned char should_print = 0;
+        unsigned char is_continued = is_continued_message(buffer, extentLength);
+        if (!is_continued) {
+            should_print = should_print_message(buffer, extentLength);
+        }
+        if (should_print) {
+            if (!is_continued) {
+                printSeparator(1);
+            }
             printMessage(1, buffer, extentLength);
-            printSeparator(1);
         }
         
         length -= extentLength;
