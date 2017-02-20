@@ -25,6 +25,7 @@ static char includeOccurrences[256];
 static char excludeOccurrences[256];
 static void (*printMessage)(int fd, const char *, size_t);
 static void (*printSeparator)(int fd);
+static int case_insensitive;
 
 static inline void write_fully(int fd, const char *buffer, size_t length)
 {
@@ -55,6 +56,18 @@ static int find_space_offsets(const char *buffer, size_t length, size_t *space_o
     }
     return o;
 }
+
+static bool find_in_string(const char *buffer, const char *pattern, bool case_ins) {
+    bool found = false;
+    if (case_ins) {
+        found = strcasestr(buffer, pattern);
+    } else {
+        found = strstr(buffer, pattern);
+    }
+
+    return found;
+}
+
 static unsigned char should_print_message(const char *buffer, size_t length)
 {
     if (length < 3)
@@ -78,7 +91,7 @@ static unsigned char should_print_message(const char *buffer, size_t length)
             if (processName[i] == '[' || processName[i] == '(')
                 processName[i] = '\0';
 
-        if (strcmp(processName, requiredProcessName) != 0){
+        if (!find_in_string(processName, requiredProcessName, case_insensitive)){
             free(processName);
             return 0;
         }
@@ -86,12 +99,12 @@ static unsigned char should_print_message(const char *buffer, size_t length)
     }
 
     // More filtering options can be added here and return 0 when they won't meed filter criteria
-    if (strlen(includeOccurrences) && !strstr(buffer, includeOccurrences))
+    if (strlen(includeOccurrences) && !find_in_string(buffer, includeOccurrences, case_insensitive))
     {
         return 0;
     }
 
-    if (strlen(excludeOccurrences) && strstr(buffer, excludeOccurrences))
+    if (strlen(excludeOccurrences) && find_in_string(buffer, excludeOccurrences, case_insensitive))
     {
         return 0;
     }
@@ -343,6 +356,7 @@ int main (int argc, char * const argv[])
 
   static struct option long_options[] =
   {
+      {"case_insensitive", no_argument, (int*)&case_insensitive, 'i'},
       {"filter", required_argument, NULL, 'f'},
       {"exclude", required_argument, NULL, 'x'},
       {"process", required_argument, NULL, 'p'},
@@ -357,7 +371,7 @@ int main (int argc, char * const argv[])
 
   int option_index = 0;
 
-  while((c = getopt_long(argc, argv, "u:s:p:f:x:", long_options, &option_index)) != -1){
+  while((c = getopt_long(argc, argv, "iu:s:p:f:x:", long_options, &option_index)) != -1){
     switch (c){
         case 0:
             break;
@@ -378,6 +392,9 @@ int main (int argc, char * const argv[])
             }
             break;
         }
+        case 'i':
+            case_insensitive = 1;
+            break;
         case 'p':
             requiredProcessName = malloc(strlen(optarg) + 1);
             requiredProcessName[strlen(optarg)] = '\0';
@@ -426,6 +443,6 @@ int main (int argc, char * const argv[])
     return 0;
 
 usage:
-    fprintf(stderr, "Usage: %s [options]\nOptions:\n-f | --filter <string>      Filter include by single word occurrences (case-sensitive)\n-x | --exclude <string>     Filter exclude by single word occurrences (case-sensitive)\n-p | --process <string>     Filter by process name (case-sensitive)\n-u | --udid <udid>          Show only logs from a specific device\n-s | --simulator <version>  Show logs from iOS Simulator\n     --debug                Include connect/disconnect messages in standard out\n     --use-separators       Skip a line between each line\n     --force-color          Force colored text\nControl-C to disconnect\n", argv[0]);
+    fprintf(stderr, "Usage: %s [options]\nOptions:\n-i | --case-insensitive     Make filters case-insensitive\n-f | --filter <string>      Filter include by single word occurrences (case-sensitive)\n-x | --exclude <string>     Filter exclude by single word occurrences (case-sensitive)\n-p | --process <string>     Filter by process name (case-sensitive)\n-u | --udid <udid>          Show only logs from a specific device\n-s | --simulator <version>  Show logs from iOS Simulator\n     --debug                Include connect/disconnect messages in standard out\n     --use-separators       Skip a line between each line\n     --force-color          Force colored text\nControl-C to disconnect\n", argv[0]);
     return 1;
 }
