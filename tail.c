@@ -84,10 +84,11 @@ void log_tail(FILE *fp)
 	struct timeval second;
     
 
-    while (getc(fp) != EOF);
+    while (getc(fp) != EOF) {
         if (ferror(fp)) {
             return;
         }
+    }
     
 	
     
