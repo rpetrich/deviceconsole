@@ -186,7 +186,14 @@ static void write_colored(int fd, const char *buffer, size_t length)
             write_fully(fd, buffer + space_offsets[1], levelLength);
         }
         write_const(fd, COLOR_RESET);
-        write_fully(fd, buffer + space_offsets[2], length - space_offsets[2]);
+        CFStringRef logMessage = CFStringCreateWithCStringNoCopy(kCFAllocatorDefault, memcpy(buffer, buffer + space_offsets[2], length), kCFStringEncodingMacRoman, kCFAllocatorNull);
+        CFMutableStringRef mutableLogMessage = CFStringCreateMutableCopy(kCFAllocatorDefault, 0, logMessage);
+        CFRelease(logMessage);
+        CFStringFindAndReplace(mutableLogMessage, CFSTR("\\^["), CFSTR("\e"), CFRangeMake(0, CFStringGetLength(mutableLogMessage)), 0);
+        const char *coloredMessage = CFStringGetCStringPtr( mutableLogMessage, kCFStringEncodingMacRoman );
+
+        write_string(fd, coloredMessage);
+        CFRelease(mutableLogMessage);
     } else {
         write_fully(fd, buffer, length);
     }
