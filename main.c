@@ -13,6 +13,8 @@ static CFMutableDictionaryRef liveConnections;
 static int debug;
 static CFStringRef requiredDeviceId;
 static char *requiredProcessName;
+static char includeOccurrences[256];
+static char excludeOccurrences[256];
 static void (*printMessage)(int fd, const char *, size_t);
 static void (*printSeparator)(int fd);
 
@@ -73,6 +75,15 @@ static unsigned char should_print_message(const char *buffer, size_t length)
     
     // More filtering options can be added here and return 0 when they won't meed filter criteria
     
+    if (strlen(includeOccurrences) && !strstr(buffer, includeOccurrences))
+    {
+        return 0;
+    }
+    
+    if (strlen(excludeOccurrences) && strstr(buffer, excludeOccurrences))
+    {
+        return 0;
+    }
     return 1;
 }
 
@@ -282,16 +293,15 @@ static void color_separator(int fd)
 int main (int argc, char * const argv[])
 {
     if ((argc == 2) && (strcmp(argv[1], "--help") == 0)) {
-        fprintf(stderr, "Usage: %s [options]\nOptions:\n -d\t\t\tInclude connect/disconnect messages in standard out\n -u <udid>\t\tShow only logs from a specific device\n -p <process name>\tShow only logs from a specific process\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
+        fprintf(stderr, "Usage: %s [options]\nOptions:\n -d\t\t\tInclude connect/disconnect messages in standard out\n -u <udid>\t\tShow only logs from a specific device\n -p <process name>\tShow only logs from a specific process\n -f <keyword>\tFilter output that contain occurrences of <keyword> (include)\n -x <keyword>\tFilter output that doesn't contain occurrences of <keyword> (exclude)\n\nControl-C to disconnect\nMail bug reports and suggestions to <ryan.petrich@medialets.com>\n", argv[0]);
         return 1;
     }
     int c;
     bool use_separators = false;
     bool force_color = false;
-
-    while ((c = getopt(argc, argv, "dcsu:p:")) != -1)
-        switch (c)
-    {
+    memset(requiredProcessName, '\0', 256);
+    while ((c = getopt(argc, argv, "dcsu:p:f:x:")) != -1)
+        switch (c) {
         case 'd':
             debug = 1;
             break;
@@ -311,6 +321,12 @@ int main (int argc, char * const argv[])
             requiredProcessName[strlen(optarg)] = '\0';
 
             strcpy(requiredProcessName, optarg);
+            break;
+        case 'f':
+            strcpy(includeOccurrences, optarg);
+            break;
+        case 'x':
+            strcpy(excludeOccurrences, optarg);
             break;
         case '?':
             if (optopt == 'u')
