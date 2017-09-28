@@ -40,7 +40,9 @@ static inline void write_fully(int fd, const char *buffer, size_t length)
 
 static inline void write_string(int fd, const char *string)
 {
-    write_fully(fd, string, strlen(string));
+    if(string != NULL){
+        write_fully(fd, string, strlen(string));
+    }
 }
 
 static int find_space_offsets(const char *buffer, size_t length, size_t *space_offsets_out)
