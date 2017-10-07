@@ -25,6 +25,7 @@ Options:
      --debug                Include connect/disconnect messages
      --use-separators       Skip a line between each line
      --force-color          Force colored text
+     --message-only         Display only level and message (Thanks to canatella)
 Control-C to disconnect
 
 
