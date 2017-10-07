@@ -18,6 +18,7 @@ static CFMutableDictionaryRef liveConnections;
 static int debug;
 static bool use_separators;
 static bool force_color = false;
+static bool message_only = false;
 static char *simulatorLogPath;
 static CFStringRef requiredDeviceId;
 static char *requiredProcessName;
@@ -145,24 +146,27 @@ static void write_colored(int fd, const char *buffer, size_t length)
 
     if (o == 3) {
 
-        // Log date and device name
-        write_const(fd, COLOR_DARK_WHITE);
-        write_fully(fd, buffer, space_offsets[0]);
-        // Log process name
-        int pos = 0;
-        for (int i = space_offsets[0]; i < space_offsets[0]; i++) {
-            if (buffer[i] == '[') {
-                pos = i;
-                break;
+        if (!message_only) {
+            // Log date and device name
+            write_const(fd, COLOR_DARK_WHITE);
+            write_fully(fd, buffer, space_offsets[0]);
+            // Log process name
+            int pos = 0;
+            for (int i = space_offsets[0]; i < space_offsets[0]; i++) {
+                if (buffer[i] == '[') {
+                    pos = i;
+                    break;
+                }
             }
-        }
-        write_const(fd, COLOR_CYAN);
-        if (pos && buffer[space_offsets[1]-1] == ']') {
-            write_fully(fd, buffer + space_offsets[0], pos - space_offsets[0]);
-            write_const(fd, COLOR_DARK_CYAN);
-            write_fully(fd, buffer + pos, space_offsets[1] - pos);
-        } else {
-            write_fully(fd, buffer + space_offsets[0], space_offsets[1] - space_offsets[0]);
+            write_const(fd, COLOR_CYAN);
+            if (pos && buffer[space_offsets[1]-1] == ']') {
+                write_fully(fd, buffer + space_offsets[0], pos - space_offsets[0]);
+                write_const(fd, COLOR_DARK_CYAN);
+                write_fully(fd, buffer + pos, space_offsets[1] - pos);
+            } else {
+                write_fully(fd, buffer + space_offsets[0], space_offsets[1] - space_offsets[0]);
+            }
+            write_const(fd, " ");
         }
         // Log level
         size_t levelLength = space_offsets[2] - space_offsets[1];
@@ -188,7 +192,7 @@ static void write_colored(int fd, const char *buffer, size_t length)
                 goto level_unformatted;
             }
             write_string(fd, darkColor);
-            write_fully(fd, buffer + space_offsets[1], 2);
+            write_fully(fd, buffer + space_offsets[1] + 1, 1);
             write_string(fd, normalColor);
             write_fully(fd, buffer + space_offsets[1] + 2, levelLength - 4);
             write_string(fd, darkColor);
@@ -368,6 +372,7 @@ int main (int argc, char * const argv[])
       {"debug", no_argument, (int*)&debug, 1},
       {"use-separators", no_argument, (int*)&use_separators, 1},
       {"force-color", no_argument, (int*)&force_color, 1},
+      {"message-only", no_argument, (int*)&message_only, 1},
       {NULL, 0, NULL, 0}
   };
 
@@ -445,6 +450,6 @@ int main (int argc, char * const argv[])
     return 0;
 
 usage:
-    fprintf(stderr, "Usage: %s [options]\nOptions:\n-i | --case-insensitive     Make filters case-insensitive\n-f | --filter <string>      Filter include by single word occurrences (case-sensitive)\n-x | --exclude <string>     Filter exclude by single word occurrences (case-sensitive)\n-p | --process <string>     Filter by process name (case-sensitive)\n-u | --udid <udid>          Show only logs from a specific device\n-s | --simulator <version>  Show logs from iOS Simulator\n     --debug                Include connect/disconnect messages in standard out\n     --use-separators       Skip a line between each line\n     --force-color          Force colored text\nControl-C to disconnect\n", argv[0]);
+    fprintf(stderr, "Usage: %s [options]\nOptions:\n-i | --case-insensitive     Make filters case-insensitive\n-f | --filter <string>      Filter include by single word occurrences (case-sensitive)\n-x | --exclude <string>     Filter exclude by single word occurrences (case-sensitive)\n-p | --process <string>     Filter by process name (case-sensitive)\n-u | --udid <udid>          Show only logs from a specific device\n-s | --simulator <version>  Show logs from iOS Simulator\n     --debug                Include connect/disconnect messages in standard out\n     --use-separators       Skip a line between each line\n     --force-color          Force colored text\n     --message-only          Display only level and message\nControl-C to disconnect\n", argv[0]);
     return 1;
 }
