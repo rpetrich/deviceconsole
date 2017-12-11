@@ -211,7 +211,11 @@ static void write_colored(int fd, const char *buffer, size_t length)
         CFStringFindAndReplace(mutableLogMessage, CFSTR("\\^["), CFSTR("\e"), CFRangeMake(0, CFStringGetLength(mutableLogMessage)), 0);
         const char *coloredMessage = CFStringGetCStringPtr( mutableLogMessage, kCFStringEncodingMacRoman );
 
-        write_string(fd, coloredMessage);
+        if (coloredMessage != NULL) {
+            write_string(fd, coloredMessage);
+        }else{
+            write_string(fd, buffer);
+        }
         CFRelease(mutableLogMessage);
     } else {
         write_fully(fd, buffer, length);
